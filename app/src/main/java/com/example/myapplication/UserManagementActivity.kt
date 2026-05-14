@@ -7,17 +7,10 @@ import android.text.TextWatcher
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
-import android.widget.EditText
-import android.widget.ImageButton
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
-import android.widget.Toast
-import android.widget.ArrayAdapter
-import android.widget.AutoCompleteTextView
+import android.view.ViewGroup
+import android.widget.*
 import androidx.activity.enableEdgeToEdge
 import com.google.android.material.datepicker.MaterialDatePicker
-import com.google.android.material.textfield.TextInputEditText
 import java.util.*
 import java.text.SimpleDateFormat
 import androidx.core.util.Pair
@@ -25,13 +18,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import android.graphics.Color
-import android.widget.Button
 import androidx.appcompat.app.AlertDialog
+import com.example.myapplication.adapters.CalendarAdapter
 import com.example.myapplication.models.*
 import com.example.myapplication.network.RetrofitClient
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.tabs.TabLayout
 import com.google.firebase.database.*
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -49,12 +45,22 @@ class UserManagementActivity : AppCompatActivity() {
     private lateinit var tvDateRange: TextView
     private lateinit var layoutPurokFilter: View
     private lateinit var actvPurokFilter: AutoCompleteTextView
-    private lateinit var switchShowArchived: com.google.android.material.switchmaterial.SwitchMaterial
+    
+    private lateinit var btnSelectMode: ImageButton
+    private lateinit var btnShowArchive: ImageButton
+    private lateinit var layoutSelectionActions: View
+    private lateinit var btnCancelSelection: ImageButton
+    private lateinit var tvSelectionCount: TextView
+    private lateinit var btnBulkArchive: ImageButton
+    private lateinit var btnBulkDelete: ImageButton
+    private lateinit var tvActiveFilterLabel: TextView
 
     private var startDate: Long? = null
     private var endDate: Long? = null
     private var selectedPurokFilter = "All Puroks"
     private var isShowArchivedOnly = false
+    private var isSelectionMode = false
+    private val selectedUsers = mutableSetOf<UserData>()
 
     private var allResidents = mutableListOf<UserData>()
     private var allDrivers = mutableListOf<UserData>()
@@ -80,12 +86,19 @@ class UserManagementActivity : AppCompatActivity() {
         setupTabLayout()
         setupSearch()
         setupBottomNavigation()
+        updateTabCounts() // Show initial zeros
         
         val dbUrl = "https://garbagesis-78d39-default-rtdb.asia-southeast1.firebasedatabase.app"
         database = FirebaseDatabase.getInstance(dbUrl).reference
 
         fetchUsers()
         fetchFirebaseRequests()
+
+        // Handle tab selection from intent
+        val targetTab = intent.getIntExtra("TAB_INDEX", 0)
+        if (targetTab > 0) {
+            tabLayout.getTabAt(targetTab)?.select()
+        }
 
         findViewById<ImageButton>(R.id.btn_back).setOnClickListener {
             startActivity(Intent(this, AdminDashboardActivity::class.java))
@@ -106,26 +119,163 @@ class UserManagementActivity : AppCompatActivity() {
         tvDateRange = findViewById(R.id.tv_date_range)
         layoutPurokFilter = findViewById(R.id.layout_purok_filter)
         actvPurokFilter = findViewById(R.id.actv_purok_filter)
-        switchShowArchived = findViewById(R.id.switch_show_archived)
+        
+        btnSelectMode = findViewById(R.id.btn_select_mode)
+        btnShowArchive = findViewById(R.id.btn_show_archive)
+        layoutSelectionActions = findViewById(R.id.layout_selection_actions)
+        btnCancelSelection = findViewById(R.id.btn_cancel_selection)
+        tvSelectionCount = findViewById(R.id.tv_selection_count)
+        btnBulkArchive = findViewById(R.id.btn_bulk_archive)
+        btnBulkDelete = findViewById(R.id.btn_bulk_delete)
+        tvActiveFilterLabel = findViewById(R.id.tv_active_filter_label)
 
         setupFilters()
     }
 
     private fun setupFilters() {
         btnDatePicker.setOnClickListener {
-            showDateSelectionDialog()
+            showDateRangePicker()
+        }
+        
+        btnDatePicker.setOnLongClickListener {
+            startDate = null
+            endDate = null
+            tvDateRange.text = "All Time"
+            filterList(etSearch.text.toString())
+            true
         }
 
         layoutPurokFilter.setOnClickListener {
-            actvPurokFilter.showDropDown()
+            showPurokBottomSheet()
         }
 
-        switchShowArchived.setOnCheckedChangeListener { _, isChecked ->
-            isShowArchivedOnly = isChecked
+        btnSelectMode.setOnClickListener {
+            toggleSelectionMode(!isSelectionMode)
+        }
+
+        btnShowArchive.setOnClickListener {
+            isShowArchivedOnly = !isShowArchivedOnly
+            btnShowArchive.setImageResource(if (isShowArchivedOnly) android.R.drawable.ic_menu_revert else android.R.drawable.ic_menu_save)
+            tvActiveFilterLabel.visibility = if (isShowArchivedOnly) View.VISIBLE else View.GONE
             filterList(etSearch.text.toString())
+        }
+
+        btnCancelSelection.setOnClickListener {
+            toggleSelectionMode(false)
+        }
+
+        btnBulkArchive.setOnClickListener {
+            if (selectedUsers.isEmpty()) return@setOnClickListener
+            showBulkConfirmDialog(true)
+        }
+
+        btnBulkDelete.setOnClickListener {
+            if (selectedUsers.isEmpty()) return@setOnClickListener
+            showBulkConfirmDialog(false) // false means permanent delete if we implement it, or just archive
         }
         
         setupPurokDropdown()
+    }
+
+    private fun showBulkConfirmDialog(isArchive: Boolean) {
+        val action = if (isArchive) (if (isShowArchivedOnly) "unarchive" else "archive") else "delete"
+        
+        val typeName = when (currentTab) {
+            0 -> "residents"
+            1 -> "drivers"
+            2 -> "requests"
+            else -> "users"
+        }
+
+        val explanation = if (action == "archive") {
+            "\n\nArchived $typeName will no longer be able to log in, and their data will be hidden from the active list. " +
+            (if (currentTab == 1) "Drivers will also be automatically removed from the tracking map." else "")
+        } else if (action == "unarchive") {
+            "\n\nThis will restore the $typeName's access and they will be able to log in again."
+        } else ""
+
+        AlertDialog.Builder(this)
+            .setTitle("Bulk ${action.replaceFirstChar { it.uppercase() }}")
+            .setMessage("Are you sure you want to $action ${selectedUsers.size} selected $typeName?$explanation")
+            .setPositiveButton("Yes") { _, _ ->
+                performBulkAction(isArchive)
+            }
+            .setNegativeButton("No", null)
+            .show()
+    }
+
+    private fun performBulkAction(isArchive: Boolean) {
+        pbLoading.visibility = View.VISIBLE
+        var completedCount = 0
+        val totalCount = selectedUsers.size
+
+        for (user in selectedUsers) {
+            val isArchivedVal = if (isShowArchivedOnly) 0 else 1
+            val request = ArchiveRequest(user.userId, user.role, isArchivedVal)
+            
+            RetrofitClient.instance.archiveUser(request).enqueue(object : Callback<ApiResponse> {
+                override fun onResponse(call: Call<ApiResponse>, response: Response<ApiResponse>) {
+                    completedCount++
+                    if (completedCount == totalCount) {
+                        pbLoading.visibility = View.GONE
+                        toggleSelectionMode(false)
+                        fetchUsers()
+                    }
+                }
+                override fun onFailure(call: Call<ApiResponse>, t: Throwable) {
+                    completedCount++
+                    if (completedCount == totalCount) {
+                        pbLoading.visibility = View.GONE
+                        toggleSelectionMode(false)
+                        fetchUsers()
+                    }
+                }
+            })
+        }
+    }
+
+    private fun showPurokBottomSheet() {
+        val puroks = arrayOf(
+            "All Puroks", "Purok 2", "Purok 3", "Purok 4", "Dos Riles", 
+            "Sentro", "San Isidro", "Paraiso", "Riverside", "Kalaw Street", 
+            "Home Subdivision", "Tanco Road / Ayala Highway", "Brixton Area"
+        )
+        
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this, R.style.BottomSheetDialogTheme)
+        val view = layoutInflater.inflate(R.layout.layout_purok_selection, null)
+        val list = view.findViewById<ListView>(R.id.list_puroks)
+        
+        val adapter = object : ArrayAdapter<String>(this, R.layout.item_purok_selection, puroks) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = super.getView(position, convertView, parent) as TextView
+                if (puroks[position] == selectedPurokFilter) {
+                    v.setTextColor(getColor(R.color.teal_link)) // Using teal for selected
+                    v.setTypeface(null, android.graphics.Typeface.BOLD)
+                } else {
+                    v.setTextColor(Color.parseColor("#333333"))
+                    v.setTypeface(null, android.graphics.Typeface.NORMAL)
+                }
+                return v
+            }
+        }
+        list.adapter = adapter
+        list.setOnItemClickListener { _, _, position, _ ->
+            selectedPurokFilter = puroks[position]
+            actvPurokFilter.setText(selectedPurokFilter)
+            filterList(etSearch.text.toString())
+            dialog.dismiss()
+        }
+        
+        dialog.setContentView(view)
+        dialog.show()
+    }
+
+    private fun toggleSelectionMode(enabled: Boolean) {
+        isSelectionMode = enabled
+        selectedUsers.clear()
+        layoutSelectionActions.visibility = if (enabled) View.VISIBLE else View.GONE
+        tvSelectionCount.text = "0 selected"
+        displayUsers(currentFilteredList)
     }
 
     private fun showDateSelectionDialog() {
@@ -165,23 +315,117 @@ class UserManagementActivity : AppCompatActivity() {
     }
 
     private fun showDateRangePicker() {
-        val builder = MaterialDatePicker.Builder.dateRangePicker()
-        builder.setTitleText("Select Date Range")
-        
-        val picker = builder.build()
-        picker.addOnPositiveButtonClickListener { range ->
-            startDate = range.first
-            endDate = range.second
+        showCustomCalendarDialog()
+    }
+
+    private fun showCustomCalendarDialog() {
+        val dialog = BottomSheetDialog(this, R.style.BottomSheetDialogTheme)
+        val view = layoutInflater.inflate(R.layout.dialog_custom_calendar, null)
+        dialog.setContentView(view)
+
+        val tvMonthYear = view.findViewById<TextView>(R.id.tv_month_year)
+        val rvCalendar = view.findViewById<RecyclerView>(R.id.rv_calendar)
+        val btnPrev = view.findViewById<ImageButton>(R.id.btn_prev_month)
+        val btnNext = view.findViewById<ImageButton>(R.id.btn_next_month)
+        val btnApply = view.findViewById<Button>(R.id.btn_create_event)
+        val btnCancel = view.findViewById<TextView>(R.id.btn_cancel)
+
+        btnApply.text = "Apply Filter"
+
+        val currentCalendar = Calendar.getInstance()
+        startDate?.let { currentCalendar.timeInMillis = it }
+
+        var tempStartDate: Calendar? = startDate?.let { Calendar.getInstance().apply { timeInMillis = it } }
+        var tempEndDate: Calendar? = endDate?.let { Calendar.getInstance().apply { timeInMillis = it } }
+
+        val updateCalendarUI = {
+            val sdf = SimpleDateFormat("MMMM, yyyy", Locale.getDefault())
+            tvMonthYear.text = sdf.format(currentCalendar.time)
             
-            val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-            val startStr = sdf.format(Date(startDate!!))
-            val endStr = sdf.format(Date(endDate!!))
-            tvDateRange.text = "$startStr - $endStr"
-            
+            val days = generateDaysForMonth(currentCalendar)
+            val adapter = rvCalendar.adapter as? CalendarAdapter
+            if (adapter == null) {
+                rvCalendar.layoutManager = GridLayoutManager(this, 7)
+                val newAdapter = CalendarAdapter(days) { clickedDate ->
+                    if (tempStartDate == null || (tempStartDate != null && tempEndDate != null)) {
+                        tempStartDate = clickedDate
+                        tempEndDate = null
+                    } else if (clickedDate.before(tempStartDate)) {
+                        tempStartDate = clickedDate
+                    } else {
+                        tempEndDate = clickedDate
+                    }
+                    (rvCalendar.adapter as CalendarAdapter).setRange(tempStartDate, tempEndDate)
+                }
+                newAdapter.setRange(tempStartDate, tempEndDate)
+                rvCalendar.adapter = newAdapter
+            } else {
+                adapter.updateDays(days)
+                adapter.setRange(tempStartDate, tempEndDate)
+            }
+        }
+
+        btnPrev.setOnClickListener {
+            currentCalendar.add(Calendar.MONTH, -1)
+            updateCalendarUI()
+        }
+
+        btnNext.setOnClickListener {
+            currentCalendar.add(Calendar.MONTH, 1)
+            updateCalendarUI()
+        }
+
+        btnApply.setOnClickListener {
+            if (tempStartDate != null) {
+                startDate = tempStartDate!!.timeInMillis
+                endDate = tempEndDate?.timeInMillis ?: startDate
+                
+                val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+                val startStr = sdf.format(Date(startDate!!))
+                val endStr = sdf.format(Date(endDate!!))
+                tvDateRange.text = if (startDate == endDate) startStr else "$startStr - $endStr"
+                
+                filterList(etSearch.text.toString())
+                dialog.dismiss()
+            } else {
+                Toast.makeText(this, "Please select a date", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val btnClear = view.findViewById<Button>(R.id.btn_clear_filter)
+        btnClear.setOnClickListener {
+            startDate = null
+            endDate = null
+            tvDateRange.text = "All Time"
             filterList(etSearch.text.toString())
+            dialog.dismiss()
+        }
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        updateCalendarUI()
+        dialog.show()
+    }
+
+    private fun generateDaysForMonth(calendar: Calendar): List<Calendar?> {
+        val days = mutableListOf<Calendar?>()
+        val cal = calendar.clone() as Calendar
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        
+        val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) - 1
+        for (i in 0 until firstDayOfWeek) {
+            days.add(null)
         }
         
-        picker.show(supportFragmentManager, "date_range_picker")
+        val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        for (i in 1..maxDay) {
+            val day = cal.clone() as Calendar
+            day.set(Calendar.DAY_OF_MONTH, i)
+            days.add(day)
+            cal.set(Calendar.DAY_OF_MONTH, i)
+        }
+        
+        return days
     }
 
     private fun setupPurokDropdown() {
@@ -217,17 +461,27 @@ class UserManagementActivity : AppCompatActivity() {
                         })
                     }
                     
+                    updateTabCounts()
                     updateList(currentTab)
                 } else {
-                    Toast.makeText(this@UserManagementActivity, "Failed to fetch users", Toast.LENGTH_SHORT).show()
+                    val errorMsg = response.body()?.message ?: "HTTP Error: ${response.code()}"
+                    Log.e("UserManagement", "Fetch Users Failed: $errorMsg")
+                    Toast.makeText(this@UserManagementActivity, "Failed to fetch users: $errorMsg", Toast.LENGTH_SHORT).show()
                 }
             }
 
             override fun onFailure(call: Call<UsersResponse>, t: Throwable) {
                 pbLoading.visibility = View.GONE
-                Toast.makeText(this@UserManagementActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                Log.e("UserManagement", "Network Error: ${t.message}", t)
+                Toast.makeText(this@UserManagementActivity, "Network Error: ${t.message}", Toast.LENGTH_SHORT).show()
             }
         })
+    }
+
+    private fun updateTabCounts() {
+        tabLayout.getTabAt(0)?.text = "Residents (${allResidents.size})"
+        tabLayout.getTabAt(1)?.text = "Drivers (${allDrivers.size})"
+        tabLayout.getTabAt(2)?.text = "Requests (${allRequests.size})"
     }
 
     private fun fetchFirebaseRequests() {
@@ -239,9 +493,16 @@ class UserManagementActivity : AppCompatActivity() {
                     val user = reqSnapshot.getValue(UserData::class.java)
                     if (user != null) {
                         user.requestId = reqSnapshot.key
-                        allRequests.add(user)
+                        // Auto-approve residents
+                        if (user.role.lowercase() == "resident") {
+                            Log.d("UserManagement", "Auto-approving resident: ${user.name}")
+                            approveRequest(user, isSilent = true)
+                        } else {
+                            allRequests.add(user)
+                        }
                     }
                 }
+                updateTabCounts()
                 if (currentTab == 2) updateList(2)
             }
             override fun onCancelled(error: DatabaseError) {
@@ -296,7 +557,7 @@ class UserManagementActivity : AppCompatActivity() {
             else -> allResidents
         }
 
-        currentFilteredList = sourceList.filter { user ->
+        var filtered = sourceList.filter { user ->
             // Search filter
             val matchesSearch = query.isEmpty() || 
                     user.name.contains(query, ignoreCase = true) || 
@@ -308,8 +569,8 @@ class UserManagementActivity : AppCompatActivity() {
                 if (isShowArchivedOnly) user.isArchived == 1 else user.isArchived == 0
             }
 
-            // Purok filter (only for Residents tab)
-            val matchesPurok = if (currentTab == 0 && selectedPurokFilter != "All Puroks") {
+            // Purok filter
+            val matchesPurok = if (selectedPurokFilter != "All Puroks") {
                 user.purok == selectedPurokFilter
             } else true
 
@@ -319,8 +580,14 @@ class UserManagementActivity : AppCompatActivity() {
             } else true
 
             matchesSearch && matchesArchive && matchesPurok && matchesDate
-        }.toMutableList()
+        }
 
+        // Apply limit of 12 for residents only when no filter is applied
+        if (currentTab == 0 && query.isEmpty() && selectedPurokFilter == "All Puroks" && startDate == null) {
+            filtered = filtered.take(12)
+        }
+
+        currentFilteredList = filtered.toMutableList()
         displayUsers(currentFilteredList)
     }
 
@@ -354,6 +621,14 @@ class UserManagementActivity : AppCompatActivity() {
             for (user in users) {
                 val view = inflater.inflate(R.layout.item_user_card, containerUsers, false)
                 
+                val cbSelect = view.findViewById<CheckBox>(R.id.cb_select)
+                cbSelect.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
+                cbSelect.isChecked = selectedUsers.contains(user)
+                cbSelect.setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked) selectedUsers.add(user) else selectedUsers.remove(user)
+                    tvSelectionCount.text = "${selectedUsers.size} selected"
+                }
+
                 view.findViewById<TextView>(R.id.tv_user_name).text = user.name
                 view.findViewById<TextView>(R.id.tv_user_email).text = user.email
                 
@@ -366,7 +641,7 @@ class UserManagementActivity : AppCompatActivity() {
 
                 val btnArchive = view.findViewById<ImageButton>(R.id.btn_archive)
 
-                if (currentTab == 2) {
+                if (currentTab == 2 || isSelectionMode) {
                     btnArchive.visibility = View.GONE
                 } else {
                     btnArchive.visibility = View.VISIBLE
@@ -398,9 +673,13 @@ class UserManagementActivity : AppCompatActivity() {
                     }
                 } else {
                     layoutActions.visibility = View.GONE
-                    ivNextView.visibility = View.VISIBLE
+                    ivNextView.visibility = if (isSelectionMode) View.GONE else View.VISIBLE
                     view.setOnClickListener {
-                        // Details logic for residents/drivers
+                        if (isSelectionMode) {
+                            cbSelect.isChecked = !cbSelect.isChecked
+                        } else {
+                            // Details logic for residents/drivers
+                        }
                     }
                 }
                 
@@ -460,9 +739,17 @@ class UserManagementActivity : AppCompatActivity() {
         val newStatus = if (user.isArchived == 1) 0 else 1
         val action = if (newStatus == 1) "archive" else "unarchive"
         
+        val roleName = user.role.lowercase()
+        val explanation = if (action == "archive") {
+            "\n\nArchived users will no longer be able to log in, and their data will be hidden. " +
+            (if (roleName == "driver") "Drivers will also be automatically removed from the tracking map." else "")
+        } else {
+            "\n\nThis will restore the user's access and they will be able to log in again."
+        }
+
         AlertDialog.Builder(this)
-            .setTitle("Confirm $action")
-            .setMessage("Are you sure you want to $action this ${user.role}?")
+            .setTitle("Confirm ${action.replaceFirstChar { it.uppercase() }}")
+            .setMessage("Are you sure you want to $action this $roleName?$explanation")
             .setPositiveButton("Yes") { _, _ ->
                 pbLoading.visibility = View.VISIBLE
                 val request = ArchiveRequest(user.userId, user.role, newStatus)
@@ -487,7 +774,7 @@ class UserManagementActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun approveRequest(user: UserData) {
+    private fun approveRequest(user: UserData, isSilent: Boolean = false) {
         val registerRequest = RegisterRequest(
             username = user.username,
             name = user.name,
@@ -501,25 +788,31 @@ class UserManagementActivity : AppCompatActivity() {
             preferredTruck = user.preferredTruck
         )
 
-        pbLoading.visibility = View.VISIBLE
+        if (!isSilent) pbLoading.visibility = View.VISIBLE
         RetrofitClient.instance.register(registerRequest).enqueue(object : Callback<ApiResponse> {
             override fun onResponse(call: Call<ApiResponse>, response: Response<ApiResponse>) {
                 if (response.isSuccessful && response.body()?.success == true) {
                     user.requestId?.let {
                         database.child("registration_requests").child(it).removeValue()
                     }
-                    Toast.makeText(this@UserManagementActivity, "User Approved!", Toast.LENGTH_SHORT).show()
+                    if (!isSilent) {
+                        Toast.makeText(this@UserManagementActivity, "User Approved!", Toast.LENGTH_SHORT).show()
+                    }
                     fetchUsers() // Refresh list
                 } else {
-                    pbLoading.visibility = View.GONE
-                    val errorMsg = response.body()?.message ?: "Approval failed"
-                    Toast.makeText(this@UserManagementActivity, errorMsg, Toast.LENGTH_SHORT).show()
+                    if (!isSilent) {
+                        pbLoading.visibility = View.GONE
+                        val errorMsg = response.body()?.message ?: "Approval failed"
+                        Toast.makeText(this@UserManagementActivity, errorMsg, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
 
             override fun onFailure(call: Call<ApiResponse>, t: Throwable) {
-                pbLoading.visibility = View.GONE
-                Toast.makeText(this@UserManagementActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                if (!isSilent) {
+                    pbLoading.visibility = View.GONE
+                    Toast.makeText(this@UserManagementActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         })
     }

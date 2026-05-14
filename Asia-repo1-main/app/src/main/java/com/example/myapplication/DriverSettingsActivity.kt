@@ -58,7 +58,7 @@ class DriverSettingsActivity : AppCompatActivity() {
 
         // Route Management
         findViewById<android.view.View>(R.id.ll_view_daily_routes).setOnClickListener { showCustomModal(R.layout.dialog_daily_routes) }
-        findViewById<android.view.View>(R.id.ll_route_history).setOnClickListener { showCustomModal(R.layout.dialog_route_history) }
+
         findViewById<android.view.View>(R.id.ll_performance_stats).setOnClickListener { showCustomModal(R.layout.dialog_performance_stats) }
 
         // Truck Information

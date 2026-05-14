@@ -51,6 +51,7 @@ class MapboxFragment : Fragment() {
 
     interface OnTrucksUpdatedListener {
         fun onTrucksUpdated(trucks: List<com.example.myapplication.models.TruckLocation>)
+        fun onUserLocationUpdated(location: android.location.Location)
     }
 
     private var trucksUpdatedListener: OnTrucksUpdatedListener? = null
@@ -178,6 +179,12 @@ class MapboxFragment : Fragment() {
     }
 
     private fun updateUserMarker(point: Point) {
+        val location = android.location.Location("Mapbox").apply {
+            latitude = point.latitude()
+            longitude = point.longitude()
+        }
+        trucksUpdatedListener?.onUserLocationUpdated(location)
+
         val name = sessionManager.getUser()?.name ?: "Me"
         val annotation = userLocationAnnotation
         if (annotation == null) {
@@ -212,10 +219,38 @@ class MapboxFragment : Fragment() {
                                     val pLng = pointSnapshot.child("lng").getValue(Double::class.java) ?: continue
                                     val pSpeed = pointSnapshot.child("speed").getValue(Double::class.java) ?: 0.0
                                     val pTime = pointSnapshot.child("timestamp").getValue(Long::class.java) ?: 0L
-                                    routePoints.add(RoutePoint(Point.fromLngLat(pLng, pLat), pSpeed, pTime))
+                                    
+                                    // 🛡️ Filter out invalid/zero coordinates
+                                    if (pLat != 0.0 && pLng != 0.0) {
+                                        routePoints.add(RoutePoint(Point.fromLngLat(pLng, pLat), pSpeed, pTime))
+                                    }
                                 }
-                                newRoutePoints[truckId] = routePoints
-                                trucks.add(com.example.myapplication.models.TruckLocation(id = 0, driverId = 0, truckId = truckId, latitude = lat, longitude = lng, speed = truckSnapshot.child("speed").getValue(Double::class.java) ?: 0.0, status = "active", isFull = truckSnapshot.child("isFull").getValue(Boolean::class.java) ?: false, plateNumber = null, updatedAt = "", driverName = driverName))
+                                
+                                // 🛡️ Sort by timestamp to prevent "zig-zag" lines from out-of-order data
+                                routePoints.sortBy { it.timestamp }
+                                
+                                // 🛡️ Keep only recent history to prevent cluttered screen
+                                val maxPoints = 200
+                                val trimmedPoints = if (routePoints.size > maxPoints) {
+                                    routePoints.takeLast(maxPoints).toMutableList()
+                                } else {
+                                    routePoints
+                                }
+                                
+                                newRoutePoints[truckId] = trimmedPoints
+                                trucks.add(com.example.myapplication.models.TruckLocation(
+                                    id = 0, 
+                                    driverId = 0, 
+                                    truckId = truckId, 
+                                    latitude = lat, 
+                                    longitude = lng, 
+                                    speed = truckSnapshot.child("speed").getValue(Double::class.java) ?: 0.0, 
+                                    status = truckSnapshot.child("status").getValue(String::class.java) ?: "active", 
+                                    isFull = truckSnapshot.child("isFull").getValue(Boolean::class.java) ?: false, 
+                                    plateNumber = null, 
+                                    updatedAt = "", 
+                                    driverName = driverName
+                                ))
                             } catch (e: Exception) {}
                         }
                         withContext(Dispatchers.Main) { 
@@ -380,8 +415,8 @@ class MapboxFragment : Fragment() {
         val options = PolylineAnnotationOptions()
             .withPoints(points)
             .withLineColor(color)
-            .withLineWidth(4.0)
-            .withLineOpacity(0.7)
+            .withLineWidth(2.5) // Thinner lines for a cleaner look
+            .withLineOpacity(0.4) // More transparent so trails don't overlap too much
             .withLineJoin(LineJoin.ROUND)
             
         return polylineAnnotationManager?.create(options)

@@ -237,6 +237,42 @@
 
         </LinearLayout>
 
+        <!-- Bulk Selection Header -->
+        <LinearLayout
+            android:id="@+id/layoutBulkActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="8dp"
+            android:visibility="gone">
+
+            <CheckBox
+                android:id="@+id/cbSelectAll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select All"
+                android:textSize="14sp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnBulkDelete"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Delete Selected"
+                android:textAllCaps="false"
+                android:textColor="#F44336"
+                app:backgroundTint="#FFEBEE"
+                app:cornerRadius="8dp"
+                app:elevation="0dp"
+                style="@style/Widget.MaterialComponents.Button.TextButton" />
+        </LinearLayout>
+
         <!-- Complaints List Container -->
         <LinearLayout
             android:id="@+id/complaintsContainer"
@@ -248,6 +284,18 @@
             <!-- Dynamically populated by ComplaintsActivity -->
 
         </LinearLayout>
+
+        <!-- View All Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnViewAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:text="View All"
+            android:textAllCaps="false"
+            android:visibility="gone"
+            style="@style/Widget.MaterialComponents.Button.TextButton" />
 
         <!-- Bottom Padding para sa Navigation -->
         <View

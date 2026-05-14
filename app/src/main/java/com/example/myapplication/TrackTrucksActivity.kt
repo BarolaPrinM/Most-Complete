@@ -91,11 +91,23 @@ class TrackTrucksActivity : AppCompatActivity(), MapboxFragment.OnTrucksUpdatedL
         // Connect Firebase data from Fragment to this Activity's list
         mapFragment?.setOnTrucksUpdatedListener(this)
 
+        selectedTruckId = intent.getStringExtra("truck_id")
+        if (selectedTruckId != null) {
+            // Give the map a moment to load before selecting
+            handler.postDelayed({
+                mapFragment?.setSelectedTruck(selectedTruckId)
+            }, 1000)
+        }
+
         setupBottomNavigation()
     }
 
     override fun onTrucksUpdated(trucks: List<TruckLocation>) {
         updateTruckList(trucks)
+    }
+
+    override fun onUserLocationUpdated(location: android.location.Location) {
+        // Implementation for tracking activity if needed
     }
 
     override fun onResume() {
@@ -140,23 +152,31 @@ class TrackTrucksActivity : AppCompatActivity(), MapboxFragment.OnTrucksUpdatedL
     }
 
     private fun updateTruckList(trucks: List<TruckLocation>) {
-        // Simple check to avoid redundant UI updates if the truck list content hasn't changed
-        // This helps resolve the "abnormal implementation" log by reducing layout passes
-        truckListContainer.removeAllViews()
-        val inflater = LayoutInflater.from(this)
+        // Optimization: Only refresh the whole list if count changed
+        // Otherwise, update individual views to prevent flickering
+        if (truckListContainer.childCount != trucks.size) {
+            truckListContainer.removeAllViews()
+            val inflater = LayoutInflater.from(this)
+            trucks.forEach { truck ->
+                val card = inflater.inflate(R.layout.item_truck_card, truckListContainer, false)
+                card.tag = truck.truckId
+                truckListContainer.addView(card)
+            }
+        }
 
+        var selectedView: View? = null
         trucks.forEach { truck ->
-            val card = inflater.inflate(R.layout.item_truck_card, truckListContainer, false)
+            val card = truckListContainer.findViewWithTag<View>(truck.truckId) ?: return@forEach
             val isSelected = truck.truckId == selectedTruckId
             
+            val cardRoot = card.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_root)
             if (isSelected) {
-                card.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_root)
-                    ?.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#2196F3")))
-                card.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_root)
-                    ?.setStrokeWidth(4)
-                
-                // Also update coverage if this is the selected truck being refreshed
+                cardRoot?.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#2196F3")))
+                cardRoot?.setStrokeWidth(4)
                 updateCoverageUI(truck.truckId)
+                selectedView = card
+            } else {
+                cardRoot?.setStrokeWidth(0)
             }
 
             card.findViewById<TextView>(R.id.tv_truck_id).text = truck.truckId
@@ -179,18 +199,23 @@ class TrackTrucksActivity : AppCompatActivity(), MapboxFragment.OnTrucksUpdatedL
                     statusBadge.setTextColor(Color.parseColor("#4CAF50"))
                     statusBadge.background.setTint(Color.parseColor("#E8F5E9"))
                 }
-                "idle" -> {
+                "idle", "paused" -> {
                     statusBadge.setTextColor(Color.parseColor("#F9A825"))
                     statusBadge.background.setTint(Color.parseColor("#FFF9C4"))
+                }
+                "full" -> {
+                    statusBadge.setTextColor(Color.parseColor("#F44336"))
+                    statusBadge.background.setTint(Color.parseColor("#FFEBEE"))
+                }
+                "completed" -> {
+                    statusBadge.setTextColor(Color.parseColor("#2196F3"))
+                    statusBadge.background.setTint(Color.parseColor("#E3F2FD"))
                 }
                 else -> { // offline
                     statusBadge.setTextColor(Color.parseColor("#9E9E9E"))
                     statusBadge.background.setTint(Color.parseColor("#F5F5F5"))
                 }
             }
-
-            // Estimate Purok based on coordinates (simplified for demo)
-            card.findViewById<TextView>(R.id.tv_location).text = "Barangay Balintawak"
 
             card.setOnClickListener {
                 if (selectedTruckId == truck.truckId) {
@@ -202,11 +227,9 @@ class TrackTrucksActivity : AppCompatActivity(), MapboxFragment.OnTrucksUpdatedL
                     mapFragment?.setSelectedTruck(truck.truckId)
                     mapFragment?.updateTrucks(listOf(truck), autoCenterOnFirst = false)
                 }
-                // Refresh list to show selection highlight
                 updateTruckList(trucks)
             }
 
-            // History Button Toggle
             val btnHistory = card.findViewById<MaterialButton>(R.id.btn_view_history)
             btnHistory.setOnClickListener {
                 isHistoryActive = !isHistoryActive
@@ -216,7 +239,6 @@ class TrackTrucksActivity : AppCompatActivity(), MapboxFragment.OnTrucksUpdatedL
                 )
             }
 
-            // Optimize/Compare Button Toggle
             val btnOptimize = card.findViewById<MaterialButton>(R.id.btn_optimize)
             btnOptimize.setOnClickListener {
                 isOptimizationActive = !isOptimizationActive
@@ -227,7 +249,6 @@ class TrackTrucksActivity : AppCompatActivity(), MapboxFragment.OnTrucksUpdatedL
                 )
             }
             
-            // ETA Calculation
             val tvEta = card.findViewById<TextView>(R.id.btn_eta)
             if (truck.latitude != 0.0) {
                 val results = FloatArray(1)
@@ -239,8 +260,14 @@ class TrackTrucksActivity : AppCompatActivity(), MapboxFragment.OnTrucksUpdatedL
             } else {
                 tvEta.text = "ETA: --"
             }
+        }
 
-            truckListContainer.addView(card)
+        // Scroll to selected truck if redirected
+        if (selectedTruckId != null && selectedView != null) {
+            val scrollView = findViewById<androidx.core.widget.NestedScrollView>(R.id.bottom_panel)
+            scrollView.post {
+                scrollView.smoothScrollTo(0, selectedView!!.top)
+            }
         }
     }
 

@@ -23,6 +23,21 @@ data class LoginRequest(
     val password: String
 )
 
+data class ForgotPasswordRequest(
+    val email: String
+)
+
+data class VerifyOtpRequest(
+    val email: String,
+    val otp: String
+)
+
+data class ResetPasswordFinalRequest(
+    val email: String,
+    val otp: String,
+    val password: String
+)
+
 data class ApiResponse(
     val success: Boolean,
     val message: String?,
@@ -60,4 +75,17 @@ data class ArchiveRequest(
     @SerializedName("user_id") val userId: Int,
     val role: String,
     @SerializedName("is_archived") val isArchived: Int
+)
+
+data class BackupHistoryResponse(
+    val success: Boolean,
+    val message: String?,
+    val backups: List<BackupFile>?
+)
+
+data class BackupFile(
+    val filename: String,
+    val size: String,
+    val date: String,
+    val url: String
 )

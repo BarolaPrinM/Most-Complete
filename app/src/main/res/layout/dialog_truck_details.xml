@@ -49,89 +49,116 @@
             android:layout_marginTop="20dp"
             android:orientation="vertical">
 
-            <RelativeLayout
+            <!-- Truck ID -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingVertical="8dp">
-                <TextView
-                    android:layout_width="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:hint="Truck ID (e.g. GT-001)"
+                app:boxStrokeColor="#00BFA5"
+                app:hintTextColor="#00BFA5">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_truck_id"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Plate Number"
-                    android:textColor="#333333" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:text="ABC 1234"
-                    android:textColor="#1A1A1A"
-                    android:textStyle="bold" />
-            </RelativeLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#E0E0E0" />
+                    android:inputType="textCapCharacters"
+                    android:textColor="#1A1A1A" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <RelativeLayout
+            <!-- Plate Number -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingVertical="8dp">
-                <TextView
-                    android:layout_width="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:hint="Plate Number"
+                app:boxStrokeColor="#00BFA5"
+                app:hintTextColor="#00BFA5">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_plate_number"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Model"
-                    android:textColor="#333333" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:text="Hino 500 Series"
-                    android:textColor="#1A1A1A"
-                    android:textStyle="bold" />
-            </RelativeLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#E0E0E0" />
+                    android:inputType="textCapCharacters"
+                    android:textColor="#1A1A1A" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <RelativeLayout
+            <!-- Model -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingVertical="8dp">
-                <TextView
-                    android:layout_width="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:hint="Model"
+                app:boxStrokeColor="#00BFA5"
+                app:hintTextColor="#00BFA5">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_truck_model"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Fuel Type"
-                    android:textColor="#333333" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:text="Diesel"
-                    android:textColor="#1A1A1A"
-                    android:textStyle="bold" />
-            </RelativeLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#E0E0E0" />
+                    android:inputType="textCapWords"
+                    android:textColor="#1A1A1A" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <RelativeLayout
+            <!-- Fuel Type -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingVertical="8dp">
-                <TextView
-                    android:layout_width="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:hint="Fuel Type"
+                app:boxStrokeColor="#00BFA5"
+                app:hintTextColor="#00BFA5">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_fuel_type"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Capacity"
-                    android:textColor="#333333" />
-                <TextView
-                    android:layout_width="wrap_content"
+                    android:inputType="textCapWords"
+                    android:textColor="#1A1A1A" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Capacity -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Capacity"
+                app:boxStrokeColor="#00BFA5"
+                app:hintTextColor="#00BFA5">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_truck_capacity"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:text="10 Tons"
-                    android:textColor="#1A1A1A"
-                    android:textStyle="bold" />
-            </RelativeLayout>
+                    android:inputType="textCapWords"
+                    android:textColor="#1A1A1A" />
+            </com.google.android.material.textfield.TextInputLayout>
+
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_close"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Close"
-            android:textColor="#00BFA5" />
+            android:orientation="horizontal"
+            android:gravity="end">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_close"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Cancel"
+                android:textColor="#757575" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_save_truck"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Save"
+                android:textColor="@android:color/white"
+                app:backgroundTint="#00BFA5"
+                app:cornerRadius="8dp" />
+        </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -21,7 +21,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingBottom="24dp">
+            android:paddingBottom="24dp"
+            android:animateLayoutChanges="true">
 
             <!-- Header Section -->
             <RelativeLayout
@@ -29,7 +30,8 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/dashboard_header_gradient"
                 android:padding="24dp"
-                android:clipToPadding="false">
+                android:clipToPadding="false"
+                android:animateLayoutChanges="true">
 
                 <LinearLayout
                     android:id="@+id/welcome_container"
@@ -73,6 +75,40 @@
                     </LinearLayout>
                 </LinearLayout>
 
+                <RelativeLayout
+                    android:id="@+id/btn_notifications"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginEnd="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="@drawable/bg_circle_logo"
+                    android:backgroundTint="#26FFFFFF"
+                    android:layout_toStartOf="@id/btn_logout">
+
+                    <ImageView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:padding="10dp"
+                        android:src="@drawable/ic_notifications"
+                        app:tint="@android:color/white" />
+
+                    <TextView
+                        android:id="@+id/badge_notification_count"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_alignParentEnd="true"
+                        android:layout_alignParentTop="true"
+                        android:background="@drawable/bg_circle_logo"
+                        android:backgroundTint="#FF4081"
+                        android:gravity="center"
+                        android:text="0"
+                        android:textColor="@android:color/white"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+                </RelativeLayout>
+
                 <com.google.android.material.card.MaterialCardView
                     android:id="@+id/btn_logout"
                     android:layout_width="40dp"
@@ -101,6 +137,7 @@
                     android:layout_marginTop="24dp"
                     android:clickable="true"
                     android:focusable="true"
+                    android:visibility="gone"
                     app:cardCornerRadius="24dp"
                     app:cardElevation="12dp"
                     app:cardBackgroundColor="#F2FFFFFF"
@@ -142,6 +179,7 @@
                                 android:layout_height="wrap_content"
                                 android:gravity="center_vertical">
                                 <TextView
+                                    android:id="@+id/tvNearbyTitle"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="🚛 Truck Nearby!"
@@ -149,6 +187,7 @@
                                     android:textSize="15sp"
                                     android:textStyle="bold" />
                                 <TextView
+                                    android:id="@+id/tvNearbyStatus"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="8dp"
@@ -163,6 +202,7 @@
                             </LinearLayout>
 
                             <TextView
+                                android:id="@+id/tvNearbyMessage"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="GT-001 is currently in Purok 2. Please prepare your waste for collection."
@@ -604,6 +644,7 @@
                             android:textColor="#757575"
                             android:textSize="13sp" />
                         <TextView
+                            android:id="@+id/tvFrequency"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_alignParentEnd="true"
@@ -628,6 +669,7 @@
                             android:textColor="#757575"
                             android:textSize="13sp" />
                         <TextView
+                            android:id="@+id/tvTimeWindow"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_alignParentEnd="true"
@@ -658,6 +700,7 @@
                                 android:src="@android:drawable/ic_menu_mylocation"
                                 app:tint="#3F51B5" />
                             <TextView
+                                android:id="@+id/tvSchedulePurok"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="4dp"

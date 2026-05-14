@@ -33,6 +33,25 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         sessionManager = SessionManager(this)
 
+        // Check for deep link from notification
+        val truckIdFromIntent = intent.getStringExtra("truck_id")
+        if (truckIdFromIntent != null && sessionManager.isLoggedIn()) {
+            val user = sessionManager.getUser()
+            val targetIntent = when (user?.role?.lowercase()) {
+                "admin" -> Intent(this, AdminDashboardActivity::class.java)
+                "resident" -> Intent(this, ResidentDashboardActivity::class.java)
+                "driver" -> Intent(this, DriverDashboardActivity::class.java)
+                else -> null
+            }
+            
+            if (targetIntent != null) {
+                targetIntent.putExtra("truck_id", truckIdFromIntent)
+                startActivity(targetIntent)
+                finish()
+                return
+            }
+        }
+
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->

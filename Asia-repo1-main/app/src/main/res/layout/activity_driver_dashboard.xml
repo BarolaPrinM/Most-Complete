@@ -104,6 +104,41 @@
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
+                    <RelativeLayout
+                        android:id="@+id/btn_notifications"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="12dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:background="@drawable/bg_circle_logo"
+                        android:backgroundTint="#26FFFFFF"
+                        app:layout_constraintEnd_toStartOf="@id/btn_logout"
+                        app:layout_constraintTop_toTopOf="parent">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:padding="12dp"
+                            android:src="@drawable/ic_notifications"
+                            app:tint="@color/white" />
+
+                        <TextView
+                            android:id="@+id/badge_notification_count"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_alignParentEnd="true"
+                            android:layout_alignParentTop="true"
+                            android:background="@drawable/bg_circle_logo"
+                            android:backgroundTint="#FF4081"
+                            android:gravity="center"
+                            android:text="0"
+                            android:textColor="@color/white"
+                            android:textSize="9sp"
+                            android:textStyle="bold"
+                            android:visibility="gone" />
+                    </RelativeLayout>
+
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/btn_logout"
                         android:layout_width="48dp"
@@ -950,30 +985,7 @@
                         </LinearLayout>
                         <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#E0E0E0" />
 
-                        <LinearLayout
-                            android:id="@+id/ll_settings_route_history"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:paddingVertical="14dp"
-                            android:paddingHorizontal="12dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:background="@drawable/ripple_green">
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Route History"
-                                android:textColor="#000000"
-                                android:textSize="14sp" />
-                            <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@drawable/ic_chevron_right"
-                                app:tint="#BDBDBD" />
-                        </LinearLayout>
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#E0E0E0" />
+
 
                         <LinearLayout
                             android:id="@+id/ll_settings_performance_stats"

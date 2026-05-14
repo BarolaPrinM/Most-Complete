@@ -38,6 +38,19 @@ interface ApiService {
     ): Call<ApiResponse>
 
     @FormUrlEncoded
+    @POST("delete_complaint.php")
+    fun deleteComplaint(
+        @Field("complaint_id") id: Int,
+        @Field("action") action: String
+    ): Call<ApiResponse>
+
+    @FormUrlEncoded
+    @POST("bulk_delete_complaints.php")
+    fun bulkDeleteComplaints(
+        @Field("complaint_ids") ids: String
+    ): Call<ApiResponse>
+
+    @FormUrlEncoded
     @POST("update_location.php")
     fun updateLocation(
         @Field("user_id") userId: Int,
@@ -45,6 +58,7 @@ interface ApiService {
         @Field("longitude") longitude: Double,
         @Field("truck_id") truckId: String,
         @Field("speed") speed: Double,
+        @Field("status") status: String,
         @Field("is_full") isFull: Boolean
     ): Call<ApiResponse>
 
@@ -59,35 +73,14 @@ interface ApiService {
     @GET("get_locations.php")
     fun getLocations(): Call<LocationsResponse>
 
-    @FormUrlEncoded
-    @POST("check_phone.php")
-    fun checkPhone(@Field("phone") phone: String): Call<ApiResponse>
+    @POST("forgot_password.php")
+    fun forgotPassword(@Body request: ForgotPasswordRequest): Call<ApiResponse>
 
-    @FormUrlEncoded
-    @POST("check_email.php")
-    fun checkEmail(@Field("email") email: String): Call<ApiResponse>
+    @POST("verify_otp.php")
+    fun verifyOtp(@Body request: VerifyOtpRequest): Call<ApiResponse>
 
-    @FormUrlEncoded
-    @POST("check_license.php")
-    fun checkLicense(@Field("license_number") license: String): Call<ApiResponse>
-
-    @FormUrlEncoded
-    @POST("check_truck.php")
-    fun checkTruck(@Field("truck_id") truckId: String): Call<ApiResponse>
-
-    @FormUrlEncoded
-    @POST("verify_token.php")
-    fun verifyToken(
-        @Field("phone") phone: String,
-        @Field("token") token: String
-    ): Call<ApiResponse>
-
-    @FormUrlEncoded
-    @POST("reset_password.php")
-    fun resetPassword(
-        @Field("phone") phone: String,
-        @Field("password") password: String
-    ): Call<ApiResponse>
+    @POST("reset_password_final.php")
+    fun resetPasswordFinal(@Body request: ResetPasswordFinalRequest): Call<ApiResponse>
 
     @FormUrlEncoded
     @POST("update_resident_profile.php")
@@ -99,6 +92,24 @@ interface ApiService {
         @Field("purok") purok: String
     ): Call<ApiResponse>
 
+    @FormUrlEncoded
+    @POST("change_password.php")
+    fun changePassword(
+        @Field("id") id: Int,
+        @Field("role") role: String,
+        @Field("old_password") oldPass: String,
+        @Field("new_password") newPass: String
+    ): Call<ApiResponse>
+
     @POST("archive_user.php")
     fun archiveUser(@Body request: ArchiveRequest): Call<ApiResponse>
+
+    @GET("trigger_backup.php")
+    fun triggerBackup(): Call<ApiResponse>
+
+    @GET("get_backup_history.php")
+    fun getBackupHistory(): Call<BackupHistoryResponse>
+
+    @GET("delete_backup.php")
+    fun deleteBackup(@retrofit2.http.Query("filename") filename: String): Call<ApiResponse>
 }

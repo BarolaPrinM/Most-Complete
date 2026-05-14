@@ -105,4 +105,10 @@
     <string name="search_requests">Search requests&#8230;</string>
     <string name="search">Search&#8230;</string>
     <string name="mapbox_access_token">pk.eyJ1IjoicHJpbmNlNjcwMyIsImEiOiJjbW9zeHB2ODIwNDFnMnRwdWxsam9sYWJmIn0.8DQhyf9Z9-yP8lCuP2WS3g</string>
+
+    <!-- Notification Consent Dialog -->
+    <string name="stay_updated">Stay Updated!</string>
+    <string name="notification_consent_msg">Enable notifications to receive real-time updates when the garbage truck is approaching your Purok, community announcements, and updates on your complaints.</string>
+    <string name="enable_notifications">Enable Notifications</string>
+    <string name="maybe_later">Maybe Later</string>
 </resources>

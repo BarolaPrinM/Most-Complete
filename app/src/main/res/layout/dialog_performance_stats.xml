@@ -54,15 +54,17 @@
                 android:layout_height="wrap_content"
                 android:paddingVertical="8dp">
                 <TextView
+                    android:id="@+id/tv_efficiency_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="On-time Completion"
+                    android:text="Collection Efficiency"
                     android:textColor="#333333" />
                 <TextView
+                    android:id="@+id/tv_efficiency_score"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
-                    android:text="95%"
+                    android:text="0%"
                     android:textColor="#2E7D32"
                     android:textStyle="bold" />
             </RelativeLayout>
@@ -73,15 +75,17 @@
                 android:layout_height="wrap_content"
                 android:paddingVertical="8dp">
                 <TextView
+                    android:id="@+id/tv_avg_speed_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Fuel Efficiency"
+                    android:text="Average Speed"
                     android:textColor="#333333" />
                 <TextView
+                    android:id="@+id/tv_avg_speed"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
-                    android:text="High"
+                    android:text="0 km/h"
                     android:textColor="#2E7D32"
                     android:textStyle="bold" />
             </RelativeLayout>
@@ -92,15 +96,17 @@
                 android:layout_height="wrap_content"
                 android:paddingVertical="8dp">
                 <TextView
+                    android:id="@+id/tv_distance_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Distance Covered"
                     android:textColor="#333333" />
                 <TextView
+                    android:id="@+id/tv_total_distance_covered"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
-                    android:text="120 km"
+                    android:text="0 km"
                     android:textColor="#1A1A1A"
                     android:textStyle="bold" />
             </RelativeLayout>

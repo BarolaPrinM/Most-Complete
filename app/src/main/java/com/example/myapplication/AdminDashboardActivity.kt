@@ -37,7 +37,7 @@ import retrofit2.Call
     import retrofit2.Callback
     import retrofit2.Response
 
-    class AdminDashboardActivity : AppCompatActivity() {
+    class AdminDashboardActivity : AppCompatActivity(), MapboxFragment.OnTrucksUpdatedListener {
         private lateinit var sessionManager: SessionManager
         private lateinit var tvActiveTrucks: TextView
         private lateinit var tvComplaintsCount: TextView
@@ -74,6 +74,7 @@ import retrofit2.Call
     private var notificationListener: ValueEventListener? = null
 
     private val notificationList = mutableListOf<com.example.myapplication.models.SystemNotification>()
+    private var activeNotificationAdapter: com.example.myapplication.adapters.NotificationAdapter? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
@@ -150,7 +151,15 @@ import retrofit2.Call
             tvComplaintsResolved.text = "0"
         }
 
-        private fun setupMap() {
+        override fun onTrucksUpdated(trucks: List<com.example.myapplication.models.TruckLocation>) {
+        // Implementation for admin dashboard if needed
+    }
+
+    override fun onUserLocationUpdated(location: android.location.Location) {
+        // Implementation for admin dashboard if needed
+    }
+
+    private fun setupMap() {
             mapFragment = supportFragmentManager.findFragmentById(R.id.map_fragment_container) as? MapboxFragment
             if (mapFragment == null) {
                 mapFragment = MapboxFragment.newInstance(MapboxFragment.MODE_DASHBOARD)
@@ -158,6 +167,7 @@ import retrofit2.Call
                     .replace(R.id.map_fragment_container, mapFragment!!)
                     .commit()
             }
+            mapFragment?.setOnTrucksUpdatedListener(this)
         }
 
         private fun setupClickListeners() {
@@ -187,20 +197,6 @@ import retrofit2.Call
 
             findViewById<android.view.View>(R.id.row_complaints).setOnClickListener {
                 startActivity(Intent(this, ComplaintsActivity::class.java))
-                overridePendingTransition(0, 0)
-            }
-
-            findViewById<android.view.View>(R.id.row_registrations).setOnClickListener {
-                val intent = Intent(this, UserManagementActivity::class.java)
-                intent.putExtra("TAB_INDEX", 2)
-                startActivity(intent)
-                overridePendingTransition(0, 0)
-            }
-
-            findViewById<android.view.View>(R.id.row_driver_issues).setOnClickListener {
-                val intent = Intent(this, ComplaintsActivity::class.java)
-                intent.putExtra("SELECTED_TAB", 1)
-                startActivity(intent)
                 overridePendingTransition(0, 0)
             }
         }
@@ -233,6 +229,8 @@ import retrofit2.Call
                         }
                         notificationList.sortByDescending { it.timestamp }
                         
+                        activeNotificationAdapter?.updateData(notificationList)
+
                         if (unreadCount > 0) {
                             badgeNotifications.text = unreadCount.toString()
                             badgeNotifications.visibility = View.VISIBLE
@@ -377,18 +375,42 @@ import retrofit2.Call
                         "COMPLAINT" -> startActivity(Intent(this, ComplaintsActivity::class.java))
                         "REGISTRATION" -> {
                             val intent = Intent(this, UserManagementActivity::class.java)
-                            intent.putExtra("TAB_INDEX", 2)
+                            intent.putExtra("TAB_INDEX", 2) // Requests tab
                             startActivity(intent)
                         }
                         "DRIVER_ISSUE" -> {
                             val intent = Intent(this, ComplaintsActivity::class.java)
-                            intent.putExtra("SELECTED_TAB", 1)
+                            intent.putExtra("SELECTED_TAB", 1) // Driver issues tab
+                            startActivity(intent)
+                        }
+                        "TRUCK_FULL", "TRIP_COMPLETED" -> {
+                            // Go to Track Trucks to see which truck is full or finished
+                            val intent = Intent(this, TrackTrucksActivity::class.java)
                             startActivity(intent)
                         }
                     }
                     dialog.dismiss()
                 }
                 rvNotifications.adapter = adapter
+                activeNotificationAdapter = adapter
+
+                // ✅ SWIPE TO DISMISS
+                val swipeHandler = object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(0, androidx.recyclerview.widget.ItemTouchHelper.LEFT or androidx.recyclerview.widget.ItemTouchHelper.RIGHT) {
+                    override fun onMove(rv: androidx.recyclerview.widget.RecyclerView, vh: androidx.recyclerview.widget.RecyclerView.ViewHolder, target: androidx.recyclerview.widget.RecyclerView.ViewHolder): Boolean = false
+                    override fun onSwiped(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder, direction: Int) {
+                        val position = viewHolder.bindingAdapterPosition
+                        val notification = notificationList[position]
+                        database.getReference("notifications").child(notification.id).removeValue()
+                            .addOnSuccessListener {
+                                Toast.makeText(this@AdminDashboardActivity, "Notification removed", Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                }
+                androidx.recyclerview.widget.ItemTouchHelper(swipeHandler).attachToRecyclerView(rvNotifications)
+            }
+
+            dialog.setOnDismissListener {
+                activeNotificationAdapter = null
             }
 
             btnClearAll.setOnClickListener {

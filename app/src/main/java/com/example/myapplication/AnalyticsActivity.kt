@@ -336,6 +336,38 @@ class AnalyticsActivity : AppCompatActivity() {
         if (complaints.isEmpty()) return
         val res = complaints.count { it.status.uppercase() == "RESOLVED" }
         findViewById<TextView>(R.id.tv_resolution_rate).text = String.format("%.1f%%", (res.toDouble() / complaints.size) * 100)
+
+        // Calculate Average Response Time for RESOLVED complaints
+        var totalResponseTimeMs = 0L
+        var resolvedWithTimeCount = 0
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+
+        for (c in complaints) {
+            if (c.status.uppercase() == "RESOLVED" && c.updatedAt != null) {
+                try {
+                    val start = sdf.parse(c.createdAt)
+                    val end = sdf.parse(c.updatedAt)
+                    if (start != null && end != null) {
+                        val diff = end.time - start.time
+                        if (diff >= 0) {
+                            totalResponseTimeMs += diff
+                            resolvedWithTimeCount++
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("Analytics", "Error parsing dates for complaint ${c.id}: ${e.message}")
+                }
+            }
+        }
+
+        val avgResponseTimeText = if (resolvedWithTimeCount > 0) {
+            val avgMs = totalResponseTimeMs / resolvedWithTimeCount
+            val hours = avgMs / 3600000.0
+            String.format("%.1f hours", hours)
+        } else {
+            "0.0 hours"
+        }
+        findViewById<TextView>(R.id.tv_performance_avg_response).text = avgResponseTimeText
     }
 
     private fun fetchNotificationStats() {
@@ -526,8 +558,68 @@ class AnalyticsActivity : AppCompatActivity() {
             val fmt = formatSpinner.text.toString()
             if (fmt.contains(".pdf")) generateNativePDF(typeSpinner.text.toString(), etStart.text.toString(), etEnd.text.toString())
             else {
-                val url = "http://192.168.254.106/Asia-repo1-main/backend/export_report.php?type=${typeSpinner.text}&format=${if(fmt.contains(".xlsx"))"xls" else "csv"}&start_date=${etStart.text}&end_date=${etEnd.text}&res_rate=${findViewById<TextView>(R.id.tv_resolution_rate).text}&avg_time=${findViewById<TextView>(R.id.tv_performance_avg_response).text}&tomorrow=${findViewById<TextView>(R.id.tv_waste_tomorrow).text}"
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                val reportType = typeSpinner.text.toString()
+                val format = if(fmt.contains(".xlsx") || fmt.contains(".xls")) "xls" else "csv"
+                val startDate = etStart.text.toString()
+                val endDate = etEnd.text.toString()
+                
+                // Get all metrics from UI
+                val resRate = findViewById<TextView>(R.id.tv_resolution_rate).text.toString()
+                val avgTime = findViewById<TextView>(R.id.tv_performance_avg_response).text.toString()
+                val tomorrowVol = findViewById<TextView>(R.id.tv_waste_tomorrow).text.toString()
+                val weeklyVol = findViewById<TextView>(R.id.tv_waste_week).text.toString()
+                val coverage = findViewById<TextView>(R.id.tv_analytics_coverage).text.toString()
+                val routesDone = findViewById<TextView>(R.id.tv_analytics_routes_done).text.toString()
+                
+                // Route Efficiency Metrics
+                val dist = findViewById<TextView>(R.id.tv_distance_covered).text.toString()
+                val stops = findViewById<TextView>(R.id.tv_stops_per_route).text.toString()
+                val collTime = findViewById<TextView>(R.id.tv_avg_collection_time).text.toString()
+                val error = findViewById<TextView>(R.id.tv_prediction_error).text.toString()
+
+                // Predictions/Insights
+                val insight1 = findViewById<TextView>(R.id.tv_rec_1).text.toString()
+                val insight2 = findViewById<TextView>(R.id.tv_rec_2).text.toString()
+
+                // Capture Fleet Distribution from UI
+                // Note: These values are already updated via fetchDataForCharts() listener
+                val activeC = findViewById<TextView>(R.id.tv_eta_1_value).text.toString().let { if(it.contains("truck", true)) "0" else "1" } // Rough estimate or we can use a dedicated map
+                
+                // Better approach: Use the counts we already have in the class if we make them member variables, 
+                // but since they are local to the listener, let's capture from the PieChart data if possible or just pass the current status
+                
+                // Capture Complaint Status Counts
+                val pendingC = findViewById<TextView>(R.id.tv_pending_count)?.text?.toString() ?: "0"
+                val inprogressC = findViewById<TextView>(R.id.tv_in_progress_count)?.text?.toString() ?: "0"
+                val resolvedC = findViewById<TextView>(R.id.tv_resolved_count)?.text?.toString() ?: "0"
+
+                // Properly build and encode the URL to avoid ERR_INVALID_RESPONSE
+                val exportUrl = Uri.parse("http://192.168.254.106/Asia-repo1-main/backend/export_report.php")
+                    .buildUpon()
+                    .appendQueryParameter("type", reportType)
+                    .appendQueryParameter("format", format)
+                    .appendQueryParameter("start_date", startDate)
+                    .appendQueryParameter("end_date", endDate)
+                    .appendQueryParameter("res_rate", resRate)
+                    .appendQueryParameter("avg_time", avgTime)
+                    .appendQueryParameter("tomorrow", tomorrowVol)
+                    .appendQueryParameter("weekly", weeklyVol)
+                    .appendQueryParameter("coverage", coverage)
+                    .appendQueryParameter("routes_done", routesDone)
+                    .appendQueryParameter("dist", dist)
+                    .appendQueryParameter("stops", stops)
+                    .appendQueryParameter("coll_time", collTime)
+                    .appendQueryParameter("error", error)
+                    .appendQueryParameter("insight1", insight1)
+                    .appendQueryParameter("insight2", insight2)
+                    .appendQueryParameter("pending_count", pendingC)
+                    .appendQueryParameter("inprogress_count", inprogressC)
+                    .appendQueryParameter("resolved_count", resolvedC)
+                    .build()
+                    .toString()
+
+                Log.d("Export", "URL: $exportUrl")
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(exportUrl)))
             }
             dialog.dismiss()
         }
@@ -554,12 +646,12 @@ class AnalyticsActivity : AppCompatActivity() {
         // --- PDF FILTERING LOGIC ---
         // Hide all sections initially if not "All Reports"
         if (reportType != "All Reports") {
-            val sections = listOf(
+            val sectionIds = listOf(
                 R.id.tv_pdf_section_1_title, R.id.layout_pdf_charts_row_1, R.id.layout_pdf_purok_coverage,
                 R.id.tv_pdf_section_2_title, R.id.layout_pdf_performance,
                 R.id.tv_pdf_section_3_title, R.id.layout_pdf_route_efficiency
             )
-            sections.forEach { view.findViewById<android.view.View>(it)?.visibility = android.view.View.GONE }
+            sectionIds.forEach { view.findViewById<android.view.View>(it)?.visibility = android.view.View.GONE }
             
             // Re-show relevant rows/sections based on type
             when (reportType) {

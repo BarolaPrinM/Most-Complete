@@ -28,7 +28,7 @@
                 android:layout_height="wrap_content"
                 android:paddingHorizontal="16dp"
                 android:paddingVertical="12dp"
-                android:background="@android:color/white"
+                android:background="@color/teal_dark"
                 android:elevation="1dp">
 
                 <ImageButton
@@ -38,7 +38,7 @@
                     android:layout_centerVertical="true"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:src="@drawable/ic_back"
-                    app:tint="#333333" />
+                    app:tint="@android:color/white" />
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -54,7 +54,7 @@
                         android:text="My Complaints"
                         android:textSize="18sp"
                         android:textStyle="bold"
-                        android:textColor="#1A1A1A" />
+                        android:textColor="@android:color/white" />
 
                     <TextView
                         android:id="@+id/tv_total_complaints"
@@ -62,7 +62,7 @@
                         android:layout_height="wrap_content"
                         android:text="2 total"
                         android:textSize="12sp"
-                        android:textColor="#757575" />
+                        android:textColor="@color/teal_light" />
                 </LinearLayout>
 
                 <ImageButton
@@ -72,7 +72,7 @@
                     android:layout_centerVertical="true"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:src="@android:drawable/ic_menu_save"
-                    app:tint="#666666" />
+                    app:tint="@android:color/white" />
             </RelativeLayout>
 
             <!-- Summary Cards -->
@@ -94,7 +94,7 @@
                     app:cardCornerRadius="16dp"
                     app:cardElevation="6dp"
                     app:strokeWidth="0dp"
-                    app:cardBackgroundColor="#FFFBEE">
+                    app:cardBackgroundColor="#E0F2F1">
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
@@ -104,7 +104,7 @@
                             android:layout_width="22dp"
                             android:layout_height="22dp"
                             android:src="@android:drawable/ic_menu_recent_history"
-                            app:tint="#F9A825" />
+                            app:tint="@color/teal_dark" />
                         <TextView
                             android:id="@+id/tv_pending_count"
                             android:layout_width="wrap_content"
@@ -113,14 +113,14 @@
                             android:text="1"
                             android:textSize="24sp"
                             android:textStyle="bold"
-                            android:textColor="#F9A825" />
+                            android:textColor="@color/teal_dark" />
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Pending"
                             android:textSize="12sp"
                             android:textStyle="bold"
-                            android:textColor="#F9A825" />
+                            android:textColor="@color/teal_dark" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -133,7 +133,7 @@
                     app:cardCornerRadius="16dp"
                     app:cardElevation="6dp"
                     app:strokeWidth="0dp"
-                    app:cardBackgroundColor="#F1F8FE">
+                    app:cardBackgroundColor="@color/teal_light">
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
@@ -143,7 +143,7 @@
                             android:layout_width="22dp"
                             android:layout_height="22dp"
                             android:src="@android:drawable/stat_notify_chat"
-                            app:tint="#1E88E5" />
+                            app:tint="#004D40" />
                         <TextView
                             android:id="@+id/tv_in_progress_count"
                             android:layout_width="wrap_content"
@@ -152,14 +152,14 @@
                             android:text="1"
                             android:textSize="24sp"
                             android:textStyle="bold"
-                            android:textColor="#1E88E5" />
+                            android:textColor="#004D40" />
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="In Progress"
                             android:textSize="12sp"
                             android:textStyle="bold"
-                            android:textColor="#1E88E5" />
+                            android:textColor="#004D40" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -172,7 +172,7 @@
                     app:cardCornerRadius="16dp"
                     app:cardElevation="6dp"
                     app:strokeWidth="0dp"
-                    app:cardBackgroundColor="#F1F8F1">
+                    app:cardBackgroundColor="@color/emerald_light">
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
@@ -182,7 +182,7 @@
                             android:layout_width="22dp"
                             android:layout_height="22dp"
                             android:src="@android:drawable/checkbox_on_background"
-                            app:tint="#43A047" />
+                            app:tint="@color/emerald_green" />
                         <TextView
                             android:id="@+id/tv_resolved_count"
                             android:layout_width="wrap_content"
@@ -191,14 +191,14 @@
                             android:text="0"
                             android:textSize="24sp"
                             android:textStyle="bold"
-                            android:textColor="#43A047" />
+                            android:textColor="@color/emerald_green" />
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Resolved"
                             android:textSize="12sp"
                             android:textStyle="bold"
-                            android:textColor="#43A047" />
+                            android:textColor="@color/emerald_green" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
@@ -215,9 +215,45 @@
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:textColor="@android:color/white"
-                app:backgroundTint="#00BFA5"
+                app:backgroundTint="@color/teal_primary"
                 app:cornerRadius="12dp"
                 app:elevation="8dp" />
+
+            <!-- Bulk Selection Header -->
+            <LinearLayout
+                android:id="@+id/layout_bulk_actions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingBottom="8dp"
+                android:visibility="gone">
+
+                <CheckBox
+                    android:id="@+id/cb_select_all"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Select All"
+                    android:textSize="14sp" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_bulk_delete"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Delete Selected"
+                    android:textAllCaps="false"
+                    android:textColor="#F44336"
+                    app:backgroundTint="#FFEBEE"
+                    app:cornerRadius="8dp"
+                    app:elevation="0dp"
+                    style="@style/Widget.MaterialComponents.Button.TextButton" />
+            </LinearLayout>
 
             <!-- Complaints List Container -->
             <LinearLayout

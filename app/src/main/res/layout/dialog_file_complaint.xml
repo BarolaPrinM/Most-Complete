@@ -30,7 +30,7 @@
                     android:layout_height="22dp"
                     android:layout_marginEnd="10dp"
                     android:src="@drawable/ic_complaints"
-                    app:tint="@color/status_green" />
+                    app:tint="@color/teal_dark" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -38,7 +38,7 @@
                     android:text="File a Complaint"
                     android:textSize="20sp"
                     android:textStyle="bold"
-                    android:textColor="@color/status_green" />
+                    android:textColor="@color/teal_dark" />
             </LinearLayout>
 
             <ImageButton
@@ -104,7 +104,7 @@
             android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="@android:color/white"
-            app:backgroundTint="#00BFA5"
+            app:backgroundTint="@color/teal_primary"
             app:cornerRadius="14dp"
             app:elevation="4dp" />
 

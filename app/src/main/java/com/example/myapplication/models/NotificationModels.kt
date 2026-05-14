@@ -2,14 +2,15 @@ package com.example.myapplication.models
 
 data class SystemNotification(
     var id: String = "",
-    val type: String = "", // COMPLAINT, REGISTRATION, DRIVER_ISSUE
-    val title: String = "",
-    val message: String = "",
-    val timestamp: Long = System.currentTimeMillis(),
-    val isRead: Boolean = false,
-    val relatedId: String = "", // ID of the complaint, user, or report
-    val status: String = "PENDING",
-    val adminResponse: String? = null
+    var type: String = "", // COMPLAINT, REGISTRATION, DRIVER_ISSUE, TRUCK_FULL, TRIP_COMPLETED
+    var title: String = "",
+    var message: String = "",
+    var timestamp: Long = System.currentTimeMillis(),
+    var isRead: Boolean = false,
+    var relatedId: String = "", // ID of the complaint, user, or report
+    var status: String = "PENDING",
+    var adminResponse: String? = null,
+    var userId: Long? = null // Target user ID for the notification
 )
 
 data class DriverIssue(

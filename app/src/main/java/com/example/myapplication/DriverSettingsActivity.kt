@@ -58,11 +58,10 @@ class DriverSettingsActivity : AppCompatActivity() {
 
         // Route Management
         findViewById<android.view.View>(R.id.ll_view_daily_routes).setOnClickListener { showCustomModal(R.layout.dialog_daily_routes) }
-        findViewById<android.view.View>(R.id.ll_route_history).setOnClickListener { showCustomModal(R.layout.dialog_route_history) }
         findViewById<android.view.View>(R.id.ll_performance_stats).setOnClickListener { showCustomModal(R.layout.dialog_performance_stats) }
 
         // Truck Information
-        findViewById<android.view.View>(R.id.ll_truck_details).setOnClickListener { showCustomModal(R.layout.dialog_truck_details) }
+        findViewById<android.view.View>(R.id.ll_truck_details).setOnClickListener { showTruckDetailsDialog() }
         findViewById<android.view.View>(R.id.ll_maintenance_schedule).setOnClickListener { showCustomModal(R.layout.dialog_maintenance_schedule) }
         findViewById<android.view.View>(R.id.ll_report_issue).setOnClickListener { showReportIssueDialog() }
 
@@ -119,6 +118,54 @@ class DriverSettingsActivity : AppCompatActivity() {
         }
 
         dialogView.findViewById<android.view.View>(R.id.btn_close)?.setOnClickListener { alertDialog.dismiss() }
+        alertDialog.show()
+    }
+
+    private fun showTruckDetailsDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_truck_details, null)
+        val alertDialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+
+        alertDialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val etTruckId = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_truck_id)
+        val etPlate = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_plate_number)
+        val etModel = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_truck_model)
+        val etFuel = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_fuel_type)
+        val etCapacity = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_truck_capacity)
+        val btnSave = dialogView.findViewById<android.view.View>(R.id.btn_save_truck)
+        val btnClose = dialogView.findViewById<android.view.View>(R.id.btn_close)
+
+        // Pre-fill data
+        val user = sessionManager.getUser()
+        val truckDetails = sessionManager.getTruckDetails()
+        etTruckId?.setText(user?.preferredTruck ?: "GT-001")
+        etPlate?.setText(truckDetails["plate"])
+        etModel?.setText(truckDetails["model"])
+        etFuel?.setText(truckDetails["fuel"])
+        etCapacity?.setText(truckDetails["capacity"])
+
+        btnSave?.setOnClickListener {
+            val truckId = etTruckId?.text.toString().trim()
+            val plate = etPlate?.text.toString().trim()
+            val model = etModel?.text.toString().trim()
+            val fuel = etFuel?.text.toString().trim()
+            val capacity = etCapacity?.text.toString().trim()
+
+            if (truckId.isEmpty() || plate.isEmpty() || model.isEmpty() || fuel.isEmpty() || capacity.isEmpty()) {
+                com.example.myapplication.utils.CustomNotification.showTopNotification(this, "Please fill all fields", true)
+                return@setOnClickListener
+            }
+
+            sessionManager.saveTruckDetails(truckId, plate, model, fuel, capacity)
+            setupProfileData() // Refresh UI in this activity
+            com.example.myapplication.utils.CustomNotification.showTopNotification(this, "Truck details updated", false)
+            alertDialog.dismiss()
+        }
+
+        btnClose?.setOnClickListener { alertDialog.dismiss() }
         alertDialog.show()
     }
 

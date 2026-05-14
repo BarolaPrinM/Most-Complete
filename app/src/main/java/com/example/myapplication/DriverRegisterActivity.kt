@@ -3,6 +3,7 @@ package com.example.myapplication
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Patterns
 import android.view.View
 import android.widget.EditText
 import android.widget.ProgressBar
@@ -11,12 +12,18 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.addTextChangedListener
 import com.example.myapplication.utils.CustomNotification
+import com.google.android.material.textfield.TextInputLayout
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 
 class DriverRegisterActivity : AppCompatActivity() {
 
+    private lateinit var tilUsername: TextInputLayout
+    private lateinit var tilEmail: TextInputLayout
+    private lateinit var tilPassword: TextInputLayout
+    private lateinit var tilConfirmPassword: TextInputLayout
     private lateinit var etUsername: EditText
     private lateinit var etEmail: EditText
     private lateinit var etPassword: com.google.android.material.textfield.TextInputEditText
@@ -41,6 +48,7 @@ class DriverRegisterActivity : AppCompatActivity() {
         }
 
         initViews()
+        setupValidation()
 
         findViewById<View>(R.id.btn_back).setOnClickListener { finish() }
         findViewById<View>(R.id.btn_cancel).setOnClickListener { finish() }
@@ -48,6 +56,10 @@ class DriverRegisterActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
+        tilUsername = findViewById(R.id.til_username)
+        tilEmail = findViewById(R.id.til_email)
+        tilPassword = findViewById(R.id.til_password)
+        tilConfirmPassword = findViewById(R.id.til_confirm_password)
         etUsername = findViewById(R.id.et_username)
         etEmail = findViewById(R.id.et_email)
         etPassword = findViewById(R.id.et_password)
@@ -61,24 +73,91 @@ class DriverRegisterActivity : AppCompatActivity() {
         tvSubmitText = findViewById(R.id.tv_submit_text)
     }
 
+    private fun setupValidation() {
+        etUsername.addTextChangedListener { tilUsername.error = null }
+        
+        etEmail.addTextChangedListener { text ->
+            val email = text.toString().trim()
+            if (email.isNotEmpty() && !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                tilEmail.error = "Please use a valid email address"
+                tilEmail.isHelperTextEnabled = false
+            } else {
+                tilEmail.error = null
+                tilEmail.isHelperTextEnabled = true
+            }
+        }
+
+        etPassword.addTextChangedListener { text ->
+            val pass = text.toString()
+            if (pass.isNotEmpty() && pass.length < 8) {
+                tilPassword.error = "At least 8 characters required"
+                tilPassword.isHelperTextEnabled = false
+            } else {
+                tilPassword.error = null
+                tilPassword.isHelperTextEnabled = true
+            }
+            validatePasswordMatch()
+        }
+
+        etConfirmPassword.addTextChangedListener {
+            validatePasswordMatch()
+        }
+    }
+
+    private fun validatePasswordMatch() {
+        val pass = etPassword.text.toString()
+        val confirmPass = etConfirmPassword.text.toString()
+        if (confirmPass.isNotEmpty() && pass != confirmPass) {
+            tilConfirmPassword.error = "Passwords do not match"
+        } else {
+            tilConfirmPassword.error = null
+        }
+    }
+
     private fun submitRequest() {
         val username = etUsername.text.toString().trim()
         val email = etEmail.text.toString().trim()
         val password = etPassword.text.toString()
+        val confirmPassword = etConfirmPassword.text.toString()
         val fullName = etFullName.text.toString().trim()
         val contactNumber = etContactNumber.text.toString().trim()
         val licenseNumber = etLicenseNumber.text.toString().trim()
         val truckAssignment = etTruckAssignment.text.toString().trim()
 
-        if (username.isEmpty() || email.isEmpty() || password.isEmpty() || fullName.isEmpty() || contactNumber.isEmpty() || licenseNumber.isEmpty()) {
-            CustomNotification.showTopNotification(this, "Please fill in all required fields")
-            return
+        var hasError = false
+
+        if (username.isEmpty()) {
+            tilUsername.error = "Username is required"
+            hasError = true
         }
 
-        if (password != etConfirmPassword.text.toString()) {
-            CustomNotification.showTopNotification(this, "Passwords do not match")
-            return
+        if (email.isEmpty()) {
+            tilEmail.error = "Email is required"
+            hasError = true
+        } else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            tilEmail.error = "Invalid email format"
+            hasError = true
         }
+
+        if (password.isEmpty()) {
+            tilPassword.error = "Password is required"
+            hasError = true
+        } else if (password.length < 8) {
+            tilPassword.error = "Too short"
+            hasError = true
+        }
+
+        if (password != confirmPassword) {
+            tilConfirmPassword.error = "Passwords do not match"
+            hasError = true
+        }
+
+        if (fullName.isEmpty() || contactNumber.isEmpty() || licenseNumber.isEmpty()) {
+            CustomNotification.showTopNotification(this, "Please fill in all required fields")
+            hasError = true
+        }
+
+        if (hasError) return
 
         showLoading(true)
 

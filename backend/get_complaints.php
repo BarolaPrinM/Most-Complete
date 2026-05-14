@@ -13,6 +13,7 @@ try {
                 c.status,
                 c.admin_response,
                 c.created_at,
+                c.deleted_by_resident,
                 COALESCE(r.name, 'Unknown Resident') as full_name,
                 COALESCE(r.purok, 'Unknown') as purok
               FROM complaints c

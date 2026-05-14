@@ -10,11 +10,23 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.appcompat.app.AlertDialog
 import com.example.myapplication.utils.SessionManager
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.example.myapplication.models.BackupFile
+import com.example.myapplication.models.BackupHistoryResponse
+import com.example.myapplication.models.UsersResponse
+import com.example.myapplication.network.RetrofitClient
+import com.example.myapplication.utils.DataExporter
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.switchmaterial.SwitchMaterial
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
 class AdminSettingsActivity : AppCompatActivity() {
     private lateinit var sessionManager: SessionManager
@@ -44,9 +56,11 @@ class AdminSettingsActivity : AppCompatActivity() {
     private fun setupSettingsActions() {
         val switchEmail = findViewById<SwitchMaterial>(R.id.switch_email_notifications)
         val switchApp = findViewById<SwitchMaterial>(R.id.switch_app_notifications)
+        val switchAutoBackup = findViewById<SwitchMaterial>(R.id.switch_auto_backup)
 
         switchEmail.isChecked = sessionManager.isEmailNotificationsEnabled()
         switchApp.isChecked = sessionManager.isAppNotificationsEnabled()
+        switchAutoBackup.isChecked = sessionManager.isAutoBackupEnabled()
 
         switchEmail.setOnCheckedChangeListener { _, isChecked ->
             sessionManager.setEmailNotificationsEnabled(isChecked)
@@ -56,6 +70,23 @@ class AdminSettingsActivity : AppCompatActivity() {
         switchApp.setOnCheckedChangeListener { _, isChecked ->
             sessionManager.setAppNotificationsEnabled(isChecked)
             Toast.makeText(this, "App notifications ${if (isChecked) "enabled" else "disabled"}", Toast.LENGTH_SHORT).show()
+        }
+
+        switchAutoBackup.setOnCheckedChangeListener { _, isChecked ->
+            sessionManager.setAutoBackupEnabled(isChecked)
+            Toast.makeText(this, "Auto Backup ${if (isChecked) "enabled" else "disabled"}", Toast.LENGTH_SHORT).show()
+        }
+
+        findViewById<android.view.View>(R.id.row_backup_now).setOnClickListener {
+            performManualBackup()
+        }
+
+        findViewById<android.view.View>(R.id.tv_view_backup_history).setOnClickListener {
+            showBackupHistory()
+        }
+
+        findViewById<android.view.View>(R.id.row_export_data).setOnClickListener {
+            exportDataToPDF()
         }
 
         findViewById<android.view.View>(R.id.row_change_password).setOnClickListener {
@@ -70,6 +101,172 @@ class AdminSettingsActivity : AppCompatActivity() {
         findViewById<android.view.View>(R.id.row_user_permissions).setOnClickListener {
             showModal(R.layout.dialog_user_permissions)
         }
+    }
+
+    private fun performManualBackup() {
+        val progressDialog = android.app.ProgressDialog(this)
+        progressDialog.setMessage("Creating system backup...")
+        progressDialog.setCancelable(false)
+        progressDialog.show()
+
+        RetrofitClient.instance.triggerBackup().enqueue(object : Callback<com.example.myapplication.models.ApiResponse> {
+            override fun onResponse(call: Call<com.example.myapplication.models.ApiResponse>, response: Response<com.example.myapplication.models.ApiResponse>) {
+                progressDialog.dismiss()
+                if (response.isSuccessful && response.body()?.success == true) {
+                    Toast.makeText(this@AdminSettingsActivity, "Backup created successfully!", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this@AdminSettingsActivity, "Backup failed: ${response.body()?.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<com.example.myapplication.models.ApiResponse>, t: Throwable) {
+                progressDialog.dismiss()
+                Toast.makeText(this@AdminSettingsActivity, "Network Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    private fun showBackupHistory() {
+        val progressDialog = android.app.ProgressDialog(this)
+        progressDialog.setMessage("Loading backup history...")
+        progressDialog.show()
+
+        RetrofitClient.instance.getBackupHistory().enqueue(object : Callback<BackupHistoryResponse> {
+            override fun onResponse(call: Call<BackupHistoryResponse>, response: Response<BackupHistoryResponse>) {
+                progressDialog.dismiss()
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val backups = response.body()?.backups ?: emptyList()
+                    if (backups.isEmpty()) {
+                        Toast.makeText(this@AdminSettingsActivity, "No backups found", Toast.LENGTH_SHORT).show()
+                    } else {
+                        displayBackupHistoryDialog(backups)
+                    }
+                } else {
+                    Toast.makeText(this@AdminSettingsActivity, "Failed to load history", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<BackupHistoryResponse>, t: Throwable) {
+                progressDialog.dismiss()
+                Toast.makeText(this@AdminSettingsActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    private fun displayBackupHistoryDialog(backups: List<BackupFile>) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_backup_history, null)
+        val alertDialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        alertDialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val recyclerView = dialogView.findViewById<RecyclerView>(R.id.rv_backups)
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        
+        recyclerView.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            inner class BackupViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+                val tvName = view.findViewById<TextView>(R.id.tv_filename)
+                val tvDetails = view.findViewById<TextView>(R.id.tv_details)
+            }
+
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                val v = LayoutInflater.from(parent.context).inflate(R.layout.item_backup_file, parent, false)
+                return BackupViewHolder(v)
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val h = holder as BackupViewHolder
+                val item = backups[position]
+                h.tvName.text = item.filename
+                h.tvDetails.text = "${item.size} • ${item.date}"
+                
+                h.itemView.setOnClickListener {
+                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(item.url))
+                    startActivity(intent)
+                    Toast.makeText(this@AdminSettingsActivity, "Downloading backup...", Toast.LENGTH_SHORT).show()
+                }
+
+                h.itemView.findViewById<View>(R.id.btn_delete_backup).setOnClickListener {
+                    confirmDeleteBackup(item.filename) {
+                        alertDialog.dismiss()
+                        showBackupHistory() // Refresh
+                    }
+                }
+            }
+
+            override fun getItemCount() = backups.size
+        }
+
+        dialogView.findViewById<View>(R.id.btn_close).setOnClickListener {
+            alertDialog.dismiss()
+        }
+
+        alertDialog.show()
+    }
+
+    private fun confirmDeleteBackup(filename: String, onDeleted: () -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Backup")
+            .setMessage("Are you sure you want to delete this backup file? This cannot be undone.")
+            .setPositiveButton("Delete") { _, _ ->
+                RetrofitClient.instance.deleteBackup(filename).enqueue(object : Callback<com.example.myapplication.models.ApiResponse> {
+                    override fun onResponse(call: Call<com.example.myapplication.models.ApiResponse>, response: Response<com.example.myapplication.models.ApiResponse>) {
+                        if (response.isSuccessful && response.body()?.success == true) {
+                            Toast.makeText(this@AdminSettingsActivity, "Backup deleted", Toast.LENGTH_SHORT).show()
+                            onDeleted()
+                        } else {
+                            Toast.makeText(this@AdminSettingsActivity, "Delete failed", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    override fun onFailure(call: Call<com.example.myapplication.models.ApiResponse>, t: Throwable) {
+                        Toast.makeText(this@AdminSettingsActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                    }
+                })
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun exportDataToPDF() {
+        val progressDialog = android.app.ProgressDialog(this)
+        progressDialog.setMessage("Preparing full system export...")
+        progressDialog.setCancelable(false)
+        progressDialog.show()
+
+        // 1. Fetch Users
+        RetrofitClient.instance.getUsers().enqueue(object : Callback<UsersResponse> {
+            override fun onResponse(call: Call<UsersResponse>, response: Response<UsersResponse>) {
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val residents = response.body()?.residents ?: emptyList()
+                    val drivers = response.body()?.users?.filter { it.role.lowercase() == "driver" } ?: emptyList()
+                    
+                    // 2. Fetch Complaints
+                    RetrofitClient.instance.getComplaints().enqueue(object : Callback<com.example.myapplication.models.ComplaintsResponse> {
+                        override fun onResponse(call: Call<com.example.myapplication.models.ComplaintsResponse>, compResponse: Response<com.example.myapplication.models.ComplaintsResponse>) {
+                            progressDialog.dismiss()
+                            val complaints = compResponse.body()?.data ?: emptyList()
+                            
+                            // 3. Generate PDF
+                            DataExporter.exportFullSystemDataPDF(this@AdminSettingsActivity, residents, drivers, complaints)
+                        }
+
+                        override fun onFailure(call: Call<com.example.myapplication.models.ComplaintsResponse>, t: Throwable) {
+                            progressDialog.dismiss()
+                            DataExporter.exportFullSystemDataPDF(this@AdminSettingsActivity, residents, drivers, emptyList())
+                        }
+                    })
+                } else {
+                    progressDialog.dismiss()
+                    Toast.makeText(this@AdminSettingsActivity, "Failed to fetch user data", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<UsersResponse>, t: Throwable) {
+                progressDialog.dismiss()
+                Toast.makeText(this@AdminSettingsActivity, "Network Error", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     private fun showModal(layoutResId: Int) {
@@ -151,6 +348,7 @@ class AdminSettingsActivity : AppCompatActivity() {
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
+            alertDialog.dismiss()
             finish()
         }
 

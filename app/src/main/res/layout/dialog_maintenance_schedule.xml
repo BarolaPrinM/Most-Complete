@@ -57,12 +57,14 @@
                 android:background="@drawable/bg_settings_item"
                 android:paddingHorizontal="12dp">
                 <TextView
+                    android:id="@+id/tv_oil_change_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Next Oil Change"
                     android:textColor="#1A1A1A"
                     android:textStyle="bold" />
                 <TextView
+                    android:id="@+id/tv_oil_change_status"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="May 15, 2026"
@@ -79,12 +81,14 @@
                 android:background="@drawable/bg_settings_item"
                 android:paddingHorizontal="12dp">
                 <TextView
+                    android:id="@+id/tv_tire_rotation_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Tire Rotation"
                     android:textColor="#1A1A1A"
                     android:textStyle="bold" />
                 <TextView
+                    android:id="@+id/tv_tire_rotation_status"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="June 02, 2026"
@@ -101,12 +105,14 @@
                 android:background="@drawable/bg_settings_item"
                 android:paddingHorizontal="12dp">
                 <TextView
+                    android:id="@+id/tv_inspection_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Full Inspection"
                     android:textColor="#1A1A1A"
                     android:textStyle="bold" />
                 <TextView
+                    android:id="@+id/tv_inspection_status"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="December 20, 2026"

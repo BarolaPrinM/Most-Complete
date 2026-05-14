@@ -13,6 +13,7 @@ import retrofit2.Callback
 import retrofit2.Response
 import android.widget.Toast
 import android.widget.LinearLayout
+import android.widget.CheckBox
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.TextView
@@ -40,6 +41,15 @@ class ComplaintsActivity : AppCompatActivity() {
     private val database = FirebaseDatabase.getInstance(dbUrl)
     private val issuesList = mutableListOf<SystemNotification>()
     private var residentComplaints = listOf<com.example.myapplication.models.Complaint>()
+    private var isShowingAll = false
+    private lateinit var btnViewAll: View
+
+    private var selectedComplaintIds = mutableSetOf<Int>()
+    private var selectedIssueIds = mutableSetOf<String>()
+    private var isSelectionMode = false
+    private lateinit var layoutBulkActions: LinearLayout
+    private lateinit var cbSelectAll: CheckBox
+    private lateinit var btnBulkDelete: View
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,6 +70,33 @@ class ComplaintsActivity : AppCompatActivity() {
         tvResolvedCount = findViewById(R.id.tvResolvedCount)
         tabLayout = findViewById(R.id.tabLayout)
         tvHeaderTitle = findViewById(R.id.tvHeaderTitle)
+        btnViewAll = findViewById(R.id.btnViewAll)
+        layoutBulkActions = findViewById(R.id.layoutBulkActions)
+        cbSelectAll = findViewById(R.id.cbSelectAll)
+        btnBulkDelete = findViewById(R.id.btnBulkDelete)
+
+        btnViewAll.setOnClickListener {
+            isShowingAll = true
+            updateUI()
+        }
+
+        cbSelectAll.setOnClickListener {
+            val isChecked = (it as CheckBox).isChecked
+            if (tabLayout.selectedTabPosition == 0) {
+                val displayList = if (isShowingAll) residentComplaints else residentComplaints.take(12)
+                if (isChecked) selectedComplaintIds.addAll(displayList.map { it.id })
+                else selectedComplaintIds.clear()
+            } else {
+                val displayList = if (isShowingAll) issuesList else issuesList.take(12)
+                if (isChecked) selectedIssueIds.addAll(displayList.map { it.id })
+                else selectedIssueIds.clear()
+            }
+            updateUI()
+        }
+
+        btnBulkDelete.setOnClickListener {
+            performBulkDelete()
+        }
 
         val btnBack = findViewById<ImageButton>(R.id.btnBack)
         btnBack.setOnClickListener {
@@ -71,7 +108,8 @@ class ComplaintsActivity : AppCompatActivity() {
 
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
-                updateUI()
+                isShowingAll = false
+                exitSelectionMode()
             }
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
             override fun onTabReselected(tab: TabLayout.Tab?) {}
@@ -90,7 +128,7 @@ class ComplaintsActivity : AppCompatActivity() {
         RetrofitClient.instance.getComplaints().enqueue(object : Callback<ComplaintsResponse> {
             override fun onResponse(call: Call<ComplaintsResponse>, response: Response<ComplaintsResponse>) {
                 if (response.isSuccessful && response.body()?.success == true) {
-                    residentComplaints = response.body()?.data ?: emptyList()
+                    residentComplaints = (response.body()?.data ?: emptyList()).sortedByDescending { it.createdAt }
                     if (tabLayout.selectedTabPosition == 0) updateUI()
                 } else {
                     Toast.makeText(this@ComplaintsActivity, "Failed to load complaints", Toast.LENGTH_SHORT).show()
@@ -131,6 +169,8 @@ class ComplaintsActivity : AppCompatActivity() {
         var inProgress = 0
         var resolved = 0
 
+        layoutBulkActions.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
+
         if (tabLayout.selectedTabPosition == 0) {
             tvHeaderTitle.text = "Resident Complaints"
             tvTotalComplaints.text = "${residentComplaints.size} total"
@@ -142,6 +182,17 @@ class ComplaintsActivity : AppCompatActivity() {
                     "IN PROGRESS" -> inProgress++
                     "RESOLVED" -> resolved++
                 }
+            }
+
+            if (residentComplaints.size > 12 && !isShowingAll) {
+                btnViewAll.visibility = View.VISIBLE
+            } else {
+                btnViewAll.visibility = View.GONE
+            }
+
+            val displayList = if (isShowingAll) residentComplaints else residentComplaints.take(12)
+            cbSelectAll.isChecked = displayList.isNotEmpty() && selectedComplaintIds.size >= displayList.size
+            for (complaint in displayList) {
                 addComplaintCard(complaint)
             }
         } else {
@@ -155,6 +206,17 @@ class ComplaintsActivity : AppCompatActivity() {
                     "IN PROGRESS" -> inProgress++
                     "RESOLVED" -> resolved++
                 }
+            }
+
+            if (issuesList.size > 12 && !isShowingAll) {
+                btnViewAll.visibility = View.VISIBLE
+            } else {
+                btnViewAll.visibility = View.GONE
+            }
+
+            val displayList = if (isShowingAll) issuesList else issuesList.take(12)
+            cbSelectAll.isChecked = displayList.isNotEmpty() && selectedIssueIds.size >= displayList.size
+            for (issue in displayList) {
                 addIssueCard(issue)
             }
         }
@@ -166,6 +228,7 @@ class ComplaintsActivity : AppCompatActivity() {
 
     private fun addComplaintCard(complaint: com.example.myapplication.models.Complaint) {
         val cardView = LayoutInflater.from(this).inflate(R.layout.item_complaint, complaintsContainer, false)
+        val cbSelect = cardView.findViewById<CheckBox>(R.id.cbSelect)
         val tvCategory = cardView.findViewById<TextView>(R.id.tvCategory)
         val tvStatus = cardView.findViewById<TextView>(R.id.tvStatus)
         val tvResidentName = cardView.findViewById<TextView>(R.id.tvResidentName)
@@ -178,6 +241,16 @@ class ComplaintsActivity : AppCompatActivity() {
         val btnResolve = cardView.findViewById<View>(R.id.btnResolve)
         val layoutResolvedDate = cardView.findViewById<LinearLayout>(R.id.layoutResolvedDate)
         val tvResolvedDate = cardView.findViewById<TextView>(R.id.tvResolvedDate)
+
+        cbSelect.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
+        cbSelect.isChecked = selectedComplaintIds.contains(complaint.id)
+        cbSelect.setOnClickListener {
+            val isChecked = (it as CheckBox).isChecked
+            if (isChecked) selectedComplaintIds.add(complaint.id)
+            else selectedComplaintIds.remove(complaint.id)
+            if (selectedComplaintIds.isEmpty()) exitSelectionMode()
+            else updateUI()
+        }
 
         tvCategory.text = complaint.category
         val status = complaint.status.uppercase().replace("_", " ")
@@ -191,11 +264,37 @@ class ComplaintsActivity : AppCompatActivity() {
         btnInProgress.setOnClickListener { updateComplaintStatus(complaint.id, "in_progress") }
         btnResolve.setOnClickListener { showResolveDialog(complaint.id.toString(), true) }
 
+        cardView.setOnClickListener {
+            if (isSelectionMode) cbSelect.performClick()
+        }
+
+        cardView.setOnLongClickListener {
+            if (!isSelectionMode) enterSelectionMode(complaint.id, null)
+            true
+        }
+
         complaintsContainer.addView(cardView)
+    }
+
+    private fun deleteComplaintFromServer(id: Int) {
+        RetrofitClient.instance.deleteComplaint(id, "delete").enqueue(object : Callback<com.example.myapplication.models.ApiResponse> {
+            override fun onResponse(call: Call<com.example.myapplication.models.ApiResponse>, response: Response<com.example.myapplication.models.ApiResponse>) {
+                if (response.isSuccessful && response.body()?.success == true) {
+                    Toast.makeText(this@ComplaintsActivity, "Complaint deleted", Toast.LENGTH_SHORT).show()
+                    fetchComplaints()
+                } else {
+                    Toast.makeText(this@ComplaintsActivity, "Delete failed", Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun onFailure(call: Call<com.example.myapplication.models.ApiResponse>, t: Throwable) {
+                Toast.makeText(this@ComplaintsActivity, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     private fun addIssueCard(issue: SystemNotification) {
         val cardView = LayoutInflater.from(this).inflate(R.layout.item_complaint, complaintsContainer, false)
+        val cbSelect = cardView.findViewById<CheckBox>(R.id.cbSelect)
         val tvCategory = cardView.findViewById<TextView>(R.id.tvCategory)
         val tvStatus = cardView.findViewById<TextView>(R.id.tvStatus)
         val tvResidentName = cardView.findViewById<TextView>(R.id.tvResidentName)
@@ -208,6 +307,16 @@ class ComplaintsActivity : AppCompatActivity() {
         val btnResolve = cardView.findViewById<View>(R.id.btnResolve)
         val layoutResolvedDate = cardView.findViewById<LinearLayout>(R.id.layoutResolvedDate)
         val tvResolvedDate = cardView.findViewById<TextView>(R.id.tvResolvedDate)
+
+        cbSelect.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
+        cbSelect.isChecked = selectedIssueIds.contains(issue.id)
+        cbSelect.setOnClickListener {
+            val isChecked = (it as CheckBox).isChecked
+            if (isChecked) selectedIssueIds.add(issue.id)
+            else selectedIssueIds.remove(issue.id)
+            if (selectedIssueIds.isEmpty()) exitSelectionMode()
+            else updateUI()
+        }
 
         tvCategory.text = issue.title.replace("New Driver Issue: ", "")
         val status = (issue.status ?: "PENDING").uppercase()
@@ -222,7 +331,87 @@ class ComplaintsActivity : AppCompatActivity() {
         btnInProgress.setOnClickListener { updateIssueStatus(issue.id, "IN PROGRESS") }
         btnResolve.setOnClickListener { showResolveDialog(issue.id, false) }
 
+        cardView.setOnClickListener {
+            if (isSelectionMode) cbSelect.performClick()
+        }
+
+        cardView.setOnLongClickListener {
+            if (!isSelectionMode) enterSelectionMode(null, issue.id)
+            true
+        }
+
         complaintsContainer.addView(cardView)
+    }
+
+    private fun enterSelectionMode(complaintId: Int?, issueId: String?) {
+        isSelectionMode = true
+        if (complaintId != null) selectedComplaintIds.add(complaintId)
+        if (issueId != null) selectedIssueIds.add(issueId)
+        updateUI()
+    }
+
+    private fun exitSelectionMode() {
+        isSelectionMode = false
+        selectedComplaintIds.clear()
+        selectedIssueIds.clear()
+        updateUI()
+    }
+
+    private fun performBulkDelete() {
+        if (tabLayout.selectedTabPosition == 0) {
+            val selected = residentComplaints.filter { selectedComplaintIds.contains(it.id) }
+            val hasUnresolved = selected.any { it.status.uppercase() != "RESOLVED" }
+            if (hasUnresolved) {
+                Toast.makeText(this, "You need to resolve the issues first before deleting it.", Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Delete Selected")
+                .setMessage("Are you sure you want to delete ${selected.size} resolved complaints?")
+                .setPositiveButton("Delete") { _, _ ->
+                    val idsString = selectedComplaintIds.joinToString(",")
+                    RetrofitClient.instance.bulkDeleteComplaints(idsString).enqueue(object : Callback<com.example.myapplication.models.ApiResponse> {
+                        override fun onResponse(call: Call<com.example.myapplication.models.ApiResponse>, response: Response<com.example.myapplication.models.ApiResponse>) {
+                            if (response.isSuccessful && response.body()?.success == true) {
+                                Toast.makeText(this@ComplaintsActivity, "Complaints deleted", Toast.LENGTH_SHORT).show()
+                                exitSelectionMode()
+                                fetchComplaints()
+                            }
+                        }
+                        override fun onFailure(call: Call<com.example.myapplication.models.ApiResponse>, t: Throwable) {}
+                    })
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else {
+            val selected = issuesList.filter { selectedIssueIds.contains(it.id) }
+            val hasUnresolved = selected.any { it.status?.uppercase() != "RESOLVED" }
+            if (hasUnresolved) {
+                Toast.makeText(this, "You need to resolve the issues first before deleting it.", Toast.LENGTH_LONG).show()
+                return
+            }
+
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Delete Selected")
+                .setMessage("Are you sure you want to delete ${selected.size} resolved issues?")
+                .setPositiveButton("Delete") { _, _ ->
+                    val total = selectedIssueIds.size
+                    var count = 0
+                    for (id in selectedIssueIds) {
+                        database.getReference("notifications").child(id).removeValue()
+                            .addOnSuccessListener {
+                                count++
+                                if (count == total) {
+                                    Toast.makeText(this@ComplaintsActivity, "Issues deleted", Toast.LENGTH_SHORT).show()
+                                    exitSelectionMode()
+                                }
+                            }
+                    }
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
     }
 
     private fun applyStatusStyle(tvStatus: TextView, status: String, layoutActions: View, btnInProgress: View, layoutAdminResponse: View, tvAdminResponse: TextView, responseText: String?, layoutResolvedDate: View, tvResolvedDate: TextView, dateText: String) {

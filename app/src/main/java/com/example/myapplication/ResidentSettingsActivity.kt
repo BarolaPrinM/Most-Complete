@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -38,7 +39,22 @@ class ResidentSettingsActivity : AppCompatActivity() {
 
         setupProfileData()
         setupClickListeners()
+        setupNotificationSwitch()
         setupBottomNavigation()
+    }
+
+    private fun setupNotificationSwitch() {
+        val switchNotifications = findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switch_notifications)
+        switchNotifications.isChecked = sessionManager.isAppNotificationsEnabled()
+        
+        switchNotifications.setOnCheckedChangeListener { _, isChecked ->
+            sessionManager.setAppNotificationsEnabled(isChecked)
+            if (isChecked) {
+                Toast.makeText(this, "Notifications enabled", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Notifications disabled", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun setupProfileData() {
@@ -62,9 +78,6 @@ class ResidentSettingsActivity : AppCompatActivity() {
             showModal(R.layout.dialog_change_password)
         }
 
-        findViewById<android.view.View>(R.id.row_privacy_settings).setOnClickListener {
-            showModal(R.layout.dialog_privacy_settings)
-        }
 
         findViewById<android.view.View>(R.id.row_data_management).setOnClickListener {
             showModal(R.layout.dialog_data_management)
@@ -102,16 +115,26 @@ class ResidentSettingsActivity : AppCompatActivity() {
         // ... (rest of logic remains similar but inside the check)
 
         if (layoutResId == R.layout.dialog_change_password) {
+            val etCurrentPassword = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_current_password)
             val etNewPassword = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_new_password)
             val etConfirmPassword = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_confirm_password)
+            val tilCurrentPassword = dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.til_current_password)
             val tilNewPassword = dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.til_new_password)
             val tilConfirmPassword = dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.til_confirm_password)
 
             dialogView.findViewById<MaterialButton>(R.id.btn_save_password)?.setOnClickListener {
+                val currentPassword = etCurrentPassword?.text.toString()
                 val newPassword = etNewPassword?.text.toString()
                 val confirmPassword = etConfirmPassword?.text.toString()
 
                 var isValid = true
+
+                if (currentPassword.isEmpty()) {
+                    tilCurrentPassword?.error = "Please enter current password"
+                    isValid = false
+                } else {
+                    tilCurrentPassword?.error = null
+                }
 
                 // Password validation regex: 8+ chars, upper, lower, number, symbol
                 val passwordPattern = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@#\$%^&+=!])(?=\\S+\$).{8,}\$"
@@ -131,19 +154,31 @@ class ResidentSettingsActivity : AppCompatActivity() {
                 }
 
                 if (isValid) {
-                    // Handle password update
-                    CustomNotification.showTopNotification(this, "Successful updated password", false)
-                    alertDialog.dismiss()
+                    val user = sessionManager.getUser()
+                    RetrofitClient.instance.changePassword(
+                        user?.userId ?: 0,
+                        user?.role ?: "resident",
+                        currentPassword,
+                        newPassword
+                    ).enqueue(object : retrofit2.Callback<ApiResponse> {
+                        override fun onResponse(call: retrofit2.Call<ApiResponse>, response: retrofit2.Response<ApiResponse>) {
+                            if (response.isSuccessful && response.body()?.success == true) {
+                                CustomNotification.showTopNotification(this@ResidentSettingsActivity, "Password updated successfully", false)
+                                alertDialog.dismiss()
+                            } else {
+                                val msg = response.body()?.message ?: "Failed to update password"
+                                CustomNotification.showTopNotification(this@ResidentSettingsActivity, msg)
+                            }
+                        }
+
+                        override fun onFailure(call: retrofit2.Call<ApiResponse>, t: Throwable) {
+                            CustomNotification.showTopNotification(this@ResidentSettingsActivity, "Connection Error")
+                        }
+                    })
                 }
             }
         }
 
-        if (layoutResId == R.layout.dialog_privacy_settings) {
-            dialogView.findViewById<MaterialButton>(R.id.btn_save_privacy)?.setOnClickListener {
-                CustomNotification.showTopNotification(this, "Privacy settings updated", false)
-                alertDialog.dismiss()
-            }
-        }
 
         if (layoutResId == R.layout.dialog_data_management) {
             val user = sessionManager.getUser()
@@ -156,7 +191,11 @@ class ResidentSettingsActivity : AppCompatActivity() {
             etEmail?.setText(user?.email)
             etPhone?.setText(user?.phone)
 
-            val puroks = arrayOf("Purok 1", "Purok 2", "Purok 3", "Purok 4", "Purok 5", "Purok 6", "Purok 7")
+            val puroks = arrayOf(
+                "Purok 2", "Purok 3", "Purok 4", "Dos Riles", 
+                "Sentro", "San Isidro", "Paraiso", "Riverside", "Kalaw Street", 
+                "Home Subdivision", "Tanco Road / Ayala Highway", "Brixton Area"
+            )
             val adapter = android.widget.ArrayAdapter(this, R.layout.dropdown_item, puroks)
             spinnerPurok?.setAdapter(adapter)
             spinnerPurok?.setText(user?.purok ?: puroks[0], false)

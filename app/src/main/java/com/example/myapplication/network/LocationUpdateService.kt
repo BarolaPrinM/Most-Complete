@@ -38,6 +38,17 @@ class LocationUpdateService : Service() {
     private var alertListener: ValueEventListener? = null
     private val dbUrl = "https://garbagesis-78d39-default-rtdb.asia-southeast1.firebasedatabase.app"
 
+    companion object {
+        const val ACTION_LOCATION_UPDATE = "com.example.myapplication.LOCATION_UPDATE"
+        const val EXTRA_LATITUDE = "latitude"
+        const val EXTRA_LONGITUDE = "longitude"
+        const val EXTRA_ACCURACY = "accuracy"
+        const val EXTRA_DISTANCE = "distance"
+        const val EXTRA_STATUS = "status"
+        const val EXTRA_CURRENT_ZONE = "current_zone"
+        const val EXTRA_SPEED = "speed"
+    }
+
     private val NOTIFICATION_ID = 12345
     private val ALERT_NOTIFICATION_ID = 54321
     private val CHANNEL_ID = "location_service_channel"
@@ -50,18 +61,30 @@ class LocationUpdateService : Service() {
 
     private var lastLocation: Location? = null
     private var lastSavedLocation: Location? = null
-    private val MIN_DISTANCE_METERS = 3.0 // Dead zone: Ignore movements less than 3 meters
+    private var MIN_DISTANCE_METERS = 5.0 // Threshold to filter out stationary jitter
     private val SMOOTHING_FACTOR = 0.5 // Lower = more smooth, but more lag
     
     private var isTruckFull = false
     private var isFullListener: ValueEventListener? = null
+    private var complaintsListener: ValueEventListener? = null
+    private var currentStatus = "active"
     private var serviceStartTime = 0L
+    private var totalDistance = 0f
     private var zonesCoveredThisTrip = mutableSetOf<String>()
 
     override fun onCreate() {
         super.onCreate()
         sessionManager = SessionManager(this)
-        serviceStartTime = System.currentTimeMillis()
+        
+        // Restore trip state
+        serviceStartTime = sessionManager.getTripStartTime()
+        if (serviceStartTime == 0L) {
+            serviceStartTime = System.currentTimeMillis()
+            sessionManager.saveTripStartTime(serviceStartTime)
+        }
+        
+        totalDistance = sessionManager.getTripDistance()
+        zonesCoveredThisTrip = sessionManager.getVisitedZones()
         
         loadNotifiedSets()
         
@@ -72,6 +95,7 @@ class LocationUpdateService : Service() {
                 override fun onDataChange(snapshot: DataSnapshot) { isTruckFull = snapshot.getValue(Boolean::class.java) ?: false }
                 override fun onCancelled(error: DatabaseError) {}
             })
+            setupComplaintsListener()
         }
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationCallback = object : LocationCallback() {
@@ -112,11 +136,58 @@ class LocationUpdateService : Service() {
         if (System.currentTimeMillis() - serviceStartTime > 4 * 60 * 60 * 1000L || zonesCoveredThisTrip.size >= 3) { markTruckAsFull(truckId, "AUTO") }
     }
 
+    private fun setupComplaintsListener() {
+        if (complaintsListener != null) return
+        
+        // Using "complaints" node - assuming it exists in Firebase for real-time alerts
+        val ref = FirebaseDatabase.getInstance(dbUrl).getReference("complaints")
+        complaintsListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val user = sessionManager.getUser() ?: return
+                if (user.role.lowercase() != "driver") return
+                
+                snapshot.children.forEach { child ->
+                    val status = child.child("status").getValue(String::class.java) ?: "PENDING"
+                    val timestamp = child.child("timestamp").getValue(Long::class.java) ?: 0L
+                    
+                    // Only notify for new pending complaints
+                    if (status.uppercase() == "PENDING" && timestamp > lastShownAlertTimestamp) {
+                        val category = child.child("category").getValue(String::class.java) ?: "Other"
+                        val zone = child.child("purok").getValue(String::class.java) ?: "Unknown"
+                        
+                        // Intelligent filtering: only notify if the complaint is in the driver's current zone
+                        if (zone == lastInsidePurok) {
+                            showSystemNotification(
+                                "New Complaint in $zone",
+                                "Category: $category. A resident just reported an issue in your current area.",
+                                user.preferredTruck ?: "GT-001"
+                            )
+                            lastShownAlertTimestamp = System.currentTimeMillis()
+                        }
+                    }
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        ref.addValueEventListener(complaintsListener!!)
+    }
+
     private fun markTruckAsFull(truckId: String, reason: String) {
         isTruckFull = true
         val ref = FirebaseDatabase.getInstance(dbUrl).getReference("truck_locations").child(truckId)
         ref.child("isFull").setValue(true); ref.child("status").setValue("full")
         
+        // Notify Admin
+        val notification = com.example.myapplication.models.SystemNotification(
+            type = "TRUCK_FULL",
+            title = "Truck Full: $truckId",
+            message = "Truck $truckId has been automatically marked as FULL ($reason).",
+            timestamp = System.currentTimeMillis(),
+            isRead = false,
+            relatedId = truckId
+        )
+        FirebaseDatabase.getInstance(dbUrl).getReference("notifications").push().setValue(notification)
+
         // Notify current zone that truck is full
         lastInsidePurok?.let { zoneName ->
             FirebaseDatabase.getInstance(dbUrl).getReference("alerts").child(zoneName).setValue(mapOf(
@@ -132,6 +203,11 @@ class LocationUpdateService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val status = intent?.getStringExtra("status")
+        if (status != null) {
+            currentStatus = status
+        }
+
         createNotificationChannel()
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
@@ -151,14 +227,15 @@ class LocationUpdateService : Service() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: 0L
                 val message = snapshot.child("message").getValue(String::class.java)
+                val truckId = snapshot.child("truck_id").getValue(String::class.java) ?: ""
                 
-                // Show notification only if:
-                // 1. It's newer than the last one we showed
-                // 2. It happened within the last 10 minutes
-                // 3. There is an actual message
                 if (timestamp > lastShownAlertTimestamp && System.currentTimeMillis() - timestamp < 600000 && message != null) {
                     lastShownAlertTimestamp = timestamp
-                    showSystemNotification("Garbage Truck Alert", message)
+                    
+                    // Respect notification preferences
+                    if (sessionManager.isAppNotificationsEnabled()) {
+                        showSystemNotification("Garbage Truck Alert", message, truckId)
+                    }
                 }
             }
             override fun onCancelled(error: DatabaseError) {}
@@ -166,10 +243,32 @@ class LocationUpdateService : Service() {
         alertRef.addValueEventListener(alertListener!!)
     }
 
-    private fun showSystemNotification(title: String, message: String) {
+    private fun showSystemNotification(title: String, message: String, truckId: String = "") {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID).setSmallIcon(R.drawable.ic_truck).setContentTitle(title).setContentText(message).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)).setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)).build()
+        
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("truck_id", truckId)
+        }
+        
+        val pendingIntent = PendingIntent.getActivity(
+            this, 
+            System.currentTimeMillis().toInt(), 
+            intent, 
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_truck)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+            .setContentIntent(pendingIntent)
+            .build()
+
         notificationManager.notify(ALERT_NOTIFICATION_ID, notification)
     }
 
@@ -181,19 +280,38 @@ class LocationUpdateService : Service() {
     private fun updateLiveLocation(location: Location) {
         val user = sessionManager.getUser() ?: return
         val timestamp = System.currentTimeMillis()
-        
+
         // --- 🛡️ INTELLIGENT GPS FILTERING ---
+        // 1. ACCURACY CHECK: Ignore poor GPS signals
+        if (location.accuracy > 35) {
+            Log.d("LocationService", "Filtered: Low accuracy (${location.accuracy}m)")
+            broadcastUpdate(location, null) // Still broadcast to update signal status UI
+            return
+        }
+
+        // 2. SANITY CHECK: Ignore 0,0 points or impossible jumps
+        if (location.latitude == 0.0 || location.longitude == 0.0) return
+
         var filteredLocation = location
         
         lastSavedLocation?.let { last ->
             val distance = location.distanceTo(last)
-            // 1. DEAD ZONE FILTER: If moved less than 3 meters, ignore (filters out jitter)
+            
+            // 3. DEAD ZONE FILTER: If moved less than threshold, ignore jitter
             if (distance < MIN_DISTANCE_METERS) {
                 Log.d("LocationService", "Filtered: Jitter detected (dist: $distance)")
+                broadcastUpdate(location, lastInsidePurok)
                 return 
             }
+
+            // 4. JUMP FILTER: Ignore jumps > 500m in a single update (likely signal bounce)
+            if (distance > 500) {
+                Log.d("LocationService", "Filtered: Impossible jump ($distance m)")
+                broadcastUpdate(location, lastInsidePurok)
+                return
+            }
             
-            // 2. LOW PASS SMOOTHING: Blend with last location to remove spikes
+            // 5. LOW PASS SMOOTHING: Blend with last location to remove spikes
             val smoothedLat = (location.latitude * SMOOTHING_FACTOR) + (last.latitude * (1.0 - SMOOTHING_FACTOR))
             val smoothedLng = (location.longitude * SMOOTHING_FACTOR) + (last.longitude * (1.0 - SMOOTHING_FACTOR))
             
@@ -201,6 +319,15 @@ class LocationUpdateService : Service() {
                 latitude = smoothedLat
                 longitude = smoothedLng
             }
+
+            // Accumulate distance
+            totalDistance += distance
+            sessionManager.saveTripDistance(totalDistance)
+
+            // Update persistent truck mileage (Phase 1)
+            val currentMileage = sessionManager.getTruckMileage()
+            val newMileage = currentMileage + (distance / 1000f) // convert to km
+            sessionManager.saveTruckMileage(newMileage)
         }
         
         lastSavedLocation = filteredLocation
@@ -209,29 +336,41 @@ class LocationUpdateService : Service() {
         if (user.role.lowercase() == "driver") {
             val truckId = user.preferredTruck ?: "GT-001"
             val database = FirebaseDatabase.getInstance(dbUrl).getReference("truck_locations")
-            database.child(truckId).get().addOnSuccessListener { snapshot ->
-                val status = snapshot.child("status").getValue(String::class.java) ?: "active"
-                val isFull = snapshot.child("isFull").getValue(Boolean::class.java) ?: false
-                database.child(truckId).updateChildren(mapOf(
-                    "truckId" to truckId, 
-                    "driverId" to user.userId, 
-                    "driverName" to user.name, 
-                    "latitude" to filteredLocation.latitude, 
-                    "longitude" to filteredLocation.longitude, 
-                    "speed" to filteredLocation.speed.toDouble(), 
-                    "isFull" to isFull, 
-                    "status" to status, 
-                    "updatedAt" to timestamp
-                ))
-                if (!isFull && status == "active") checkGeofences(filteredLocation, user.name)
-                database.child(truckId).child("route_history").push().setValue(mapOf(
-                    "lat" to filteredLocation.latitude, 
-                    "lng" to filteredLocation.longitude, 
-                    "speed" to filteredLocation.speed.toDouble(),
-                    "timestamp" to timestamp
-                ))
+            
+            val effectiveStatus = if (isTruckFull) "full" else currentStatus
+
+            database.child(truckId).updateChildren(mapOf(
+                "truckId" to truckId, 
+                "driverId" to user.userId, 
+                "driverName" to user.name, 
+                "latitude" to filteredLocation.latitude, 
+                "longitude" to filteredLocation.longitude, 
+                "speed" to filteredLocation.speed.toDouble(), 
+                "isFull" to isTruckFull, 
+                "status" to effectiveStatus, 
+                "updatedAt" to timestamp
+            ))
+            
+            if (!isTruckFull && effectiveStatus == "active") {
+                checkGeofences(filteredLocation, user.preferredTruck ?: "Unknown Truck")
             }
-            RetrofitClient.instance.updateLocation(user.userId, filteredLocation.latitude, filteredLocation.longitude, truckId, filteredLocation.speed.toDouble(), isTruckFull).enqueue(object : Callback<ApiResponse> {
+            
+            database.child(truckId).child("route_history").push().setValue(mapOf(
+                "lat" to filteredLocation.latitude, 
+                "lng" to filteredLocation.longitude, 
+                "speed" to filteredLocation.speed.toDouble(),
+                "timestamp" to timestamp
+            ))
+
+            RetrofitClient.instance.updateLocation(
+                user.userId, 
+                filteredLocation.latitude, 
+                filteredLocation.longitude, 
+                truckId, 
+                filteredLocation.speed.toDouble(), 
+                effectiveStatus,
+                isTruckFull
+            ).enqueue(object : Callback<ApiResponse> {
                 override fun onResponse(call: Call<ApiResponse>, response: Response<ApiResponse>) {}
                 override fun onFailure(call: Call<ApiResponse>, t: Throwable) {}
             })
@@ -245,17 +384,37 @@ class LocationUpdateService : Service() {
                 "updatedAt" to timestamp
             ))
         }
+
+        broadcastUpdate(filteredLocation, lastInsidePurok)
+    }
+
+    private fun broadcastUpdate(location: Location, currentZone: String?) {
+        val intent = Intent(ACTION_LOCATION_UPDATE)
+        intent.putExtra(EXTRA_LATITUDE, location.latitude)
+        intent.putExtra(EXTRA_LONGITUDE, location.longitude)
+        intent.putExtra(EXTRA_ACCURACY, location.accuracy.toDouble())
+        intent.putExtra(EXTRA_DISTANCE, totalDistance.toDouble())
+        intent.putExtra(EXTRA_STATUS, if (isTruckFull) "full" else currentStatus)
+        intent.putExtra(EXTRA_CURRENT_ZONE, currentZone)
+        intent.putExtra(EXTRA_SPEED, location.speed.toDouble())
+        sendBroadcast(intent)
     }
 
     private fun checkGeofences(location: Location, driverName: String) {
         val truckId = sessionManager.getUser()?.preferredTruck ?: "GT-001"
         
-        // 1. Check for Arrival (Inside Zone)
         val currentZone = PurokManager.getZoneAt(location.latitude, location.longitude)
         val currentlyInside = currentZone?.name
         
         if (currentlyInside != null) {
-            zonesCoveredThisTrip.add(currentlyInside)
+            // Re-fetch latest visited zones from session manager to sync with manual updates
+            zonesCoveredThisTrip = sessionManager.getVisitedZones()
+
+            if (!zonesCoveredThisTrip.contains(currentlyInside)) {
+                zonesCoveredThisTrip.add(currentlyInside)
+                sessionManager.saveVisitedZones(zonesCoveredThisTrip)
+            }
+
             if (currentlyInside != lastInsidePurok) {
                 logZoneEvent(truckId, currentlyInside, "ENTRY")
                 if (!isTruckFull && !notifiedZones.contains(currentlyInside)) {
@@ -271,26 +430,20 @@ class LocationUpdateService : Service() {
         }
         lastInsidePurok = currentlyInside
 
-        // 2. Check for Proximity/ETA (Nearby Zones)
         if (!isTruckFull) {
             for (zone in PurokManager.purokZones) {
-                if (zone.name == currentlyInside) continue // Already handled arrival
-                if (etaNotifiedZones.contains(zone.name)) continue // Already notified ETA today
+                if (zone.name == currentlyInside) continue
+                if (etaNotifiedZones.contains(zone.name)) continue
                 
                 val zoneLoc = Location("").apply { latitude = zone.latitude; longitude = zone.longitude }
                 val distance = location.distanceTo(zoneLoc)
                 
-                // Only consider if within 5km for ETA accuracy
                 if (distance < 5000) {
                     val etaSeconds = PredictionEngine.predictArrivalTime(distance.toDouble(), emptyList())
-                    
-                    // Trigger "Prep Alert" at ~15 minutes (900 seconds)
                     if (etaSeconds <= 900) {
-                        // Smart Filter: Bearing check (is truck moving TOWARDS the zone?)
                         if (location.hasBearing()) {
                             val bearingToZone = location.bearingTo(zoneLoc)
                             val bearingDiff = Math.abs(location.bearing - bearingToZone)
-                            // If bearing difference is > 90 degrees, it's moving away
                             if (bearingDiff > 90 && bearingDiff < 270) continue
                         }
 
@@ -346,6 +499,9 @@ class LocationUpdateService : Service() {
             val user = sessionManager.getUser()
             val truckId = user?.preferredTruck ?: "GT-001"
             FirebaseDatabase.getInstance(dbUrl).getReference("truck_locations").child(truckId).child("isFull").removeEventListener(it)
+        }
+        complaintsListener?.let {
+            FirebaseDatabase.getInstance(dbUrl).getReference("complaints").removeEventListener(it)
         }
         super.onDestroy() 
     }

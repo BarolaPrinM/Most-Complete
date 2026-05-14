@@ -12,7 +12,8 @@ data class Complaint(
     val status: String,
     @SerializedName("admin_response") val adminResponse: String?,
     @SerializedName("created_at") val createdAt: String,
-    @SerializedName("updated_at") val updatedAt: String?
+    @SerializedName("updated_at") val updatedAt: String?,
+    @SerializedName("deleted_by_resident") val deletedByResident: Int = 0
 )
 
 data class ComplaintsResponse(

@@ -52,7 +52,13 @@ class NotificationAdapter(
 
         // Style based on type
         when (notification.type) {
-            "COMPLAINT" -> {
+            "ARRIVAL_ALERT" -> {
+                holder.iconContainer.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#E0F2F1"))
+                holder.ivIcon.setImageResource(R.drawable.ic_truck)
+                holder.ivIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#00BFA5"))
+                holder.cardViewParent.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#B2DFDB")))
+            }
+            "COMPLAINT", "COMPLAINT_RESOLVED" -> {
                 holder.iconContainer.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FFF3E0"))
                 holder.ivIcon.setImageResource(R.drawable.ic_complaints)
                 holder.ivIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#FF9800"))
@@ -69,6 +75,18 @@ class NotificationAdapter(
                 holder.ivIcon.setImageResource(R.drawable.ic_complaints)
                 holder.ivIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#D32F2F"))
                 holder.cardViewParent.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#FFCDD2")))
+            }
+            "TRUCK_FULL" -> {
+                holder.iconContainer.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FFFDE7"))
+                holder.ivIcon.setImageResource(R.drawable.ic_truck)
+                holder.ivIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#FBC02D"))
+                holder.cardViewParent.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#FFF9C4")))
+            }
+            "TRIP_COMPLETED" -> {
+                holder.iconContainer.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#E1F5FE"))
+                holder.ivIcon.setImageResource(android.R.drawable.ic_menu_today)
+                holder.ivIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#0288D1"))
+                holder.cardViewParent.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#B3E5FC")))
             }
             else -> {
                 holder.iconContainer.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#E3F2FD"))

@@ -18,6 +18,12 @@ import com.google.android.material.bottomnavigation.BottomNavigationView
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
+import android.widget.Toast
+import com.google.firebase.database.*
+import com.example.myapplication.models.SystemNotification
+import com.example.myapplication.adapters.NotificationAdapter
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 
 class DriverDashboardActivity : AppCompatActivity() {
 
@@ -37,8 +43,15 @@ class DriverDashboardActivity : AppCompatActivity() {
     private lateinit var tvSettingsProfileTruck: TextView
     
     private var mapFragment: MapboxFragment? = null
-
     private var activeDialog: AlertDialog? = null
+
+    // Notifications
+    private val dbUrl = "https://garbagesis-78d39-default-rtdb.asia-southeast1.firebasedatabase.app"
+    private val database = FirebaseDatabase.getInstance(dbUrl)
+    private var notificationListener: ValueEventListener? = null
+    private val notificationList = mutableListOf<SystemNotification>()
+    private lateinit var badgeNotifications: TextView
+    private var lastCurrentZone: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,6 +79,7 @@ class DriverDashboardActivity : AppCompatActivity() {
         setupSettingsTab()
         setupSettingsClickListeners()
         setupMap(isFullMode = false)
+        setupRealtimeNotifications()
         checkLocationPermissions()
         
         // Initial setup for Dashboard
@@ -88,7 +102,12 @@ class DriverDashboardActivity : AppCompatActivity() {
         tvSettingsProfileName = findViewById(R.id.tv_settings_profile_name)
         tvSettingsProfileContact = findViewById(R.id.tv_settings_profile_contact)
         tvSettingsProfileTruck = findViewById(R.id.tv_settings_profile_truck)
-        
+        badgeNotifications = findViewById(R.id.badge_notification_count)
+
+        findViewById<android.view.View>(R.id.btn_notifications).setOnClickListener {
+            showNotificationModal()
+        }
+
         findViewById<android.view.View>(R.id.btn_switch_to_map).setOnClickListener {
             switchToTab(R.id.nav_map)
         }
@@ -114,9 +133,7 @@ class DriverDashboardActivity : AppCompatActivity() {
         findViewById<android.view.View>(R.id.ll_settings_view_daily_routes).setOnClickListener {
             showSettingsModal(R.layout.dialog_daily_routes)
         }
-        findViewById<android.view.View>(R.id.ll_settings_route_history).setOnClickListener {
-            showSettingsModal(R.layout.dialog_route_history)
-        }
+
         findViewById<android.view.View>(R.id.ll_settings_performance_stats).setOnClickListener {
             showSettingsModal(R.layout.dialog_performance_stats)
         }
@@ -281,8 +298,99 @@ class DriverDashboardActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        notificationListener?.let { database.getReference("notifications").removeEventListener(it) }
         activeDialog?.dismiss()
         activeDialog = null
         super.onDestroy()
+    }
+
+    private fun setupRealtimeNotifications() {
+        val user = sessionManager.getUser() ?: return
+        
+        notificationListener = database.getReference("notifications").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                notificationList.clear()
+                var unreadCount = 0
+                for (child in snapshot.children) {
+                    val notification = child.getValue(SystemNotification::class.java)
+                    if (notification != null) {
+                        // 1. Alert when Admin resolves their reported issue
+                        val isMyResolvedIssue = notification.type == "DRIVER_ISSUE" && 
+                                              notification.userId == user.userId.toLong() && 
+                                              notification.status == "RESOLVED"
+                        
+                        // 2. Alert for complaints in current purok
+                        val isComplaintInMyPurok = notification.type == "COMPLAINT" && 
+                                                 lastCurrentZone != null && 
+                                                 notification.message.contains(lastCurrentZone!!, ignoreCase = true)
+
+                        if (isMyResolvedIssue || isComplaintInMyPurok || notification.type == "GENERAL") {
+                            notificationList.add(notification.copy(id = child.key ?: ""))
+                            if (!notification.isRead) unreadCount++
+                        }
+                    }
+                }
+                notificationList.sortByDescending { it.timestamp }
+                
+                if (unreadCount > 0) {
+                    badgeNotifications.text = unreadCount.toString()
+                    badgeNotifications.visibility = View.VISIBLE
+                } else {
+                    badgeNotifications.visibility = View.GONE
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    private fun showNotificationModal() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_notifications, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val rvNotifications = dialogView.findViewById<RecyclerView>(R.id.rv_notifications)
+        val llEmpty = dialogView.findViewById<LinearLayout>(R.id.ll_empty_state)
+        val btnClearAll = dialogView.findViewById<TextView>(R.id.btn_clear_all)
+        val btnClose = dialogView.findViewById<android.view.View>(R.id.btn_close)
+
+        if (notificationList.isEmpty()) {
+            rvNotifications.visibility = android.view.View.GONE
+            llEmpty.visibility = android.view.View.VISIBLE
+        } else {
+            rvNotifications.visibility = android.view.View.VISIBLE
+            llEmpty.visibility = android.view.View.GONE
+            
+            rvNotifications.layoutManager = LinearLayoutManager(this)
+            val adapter = NotificationAdapter(this, notificationList) { notification ->
+                // Mark as read
+                database.getReference("notifications").child(notification.id).child("isRead").setValue(true)
+                dialog.dismiss()
+            }
+            rvNotifications.adapter = adapter
+
+            // ✅ SWIPE TO DISMISS
+            val swipeHandler = object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(0, androidx.recyclerview.widget.ItemTouchHelper.LEFT or androidx.recyclerview.widget.ItemTouchHelper.RIGHT) {
+                override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean = false
+                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                    val position = viewHolder.adapterPosition
+                    val notification = notificationList[position]
+                    database.getReference("notifications").child(notification.id).removeValue()
+                        .addOnSuccessListener {
+                            android.widget.Toast.makeText(this@DriverDashboardActivity, "Notification removed", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                }
+            }
+            androidx.recyclerview.widget.ItemTouchHelper(swipeHandler).attachToRecyclerView(rvNotifications)
+        }
+
+        btnClearAll.setOnClickListener {
+            Toast.makeText(this, "Only admins can clear all notifications", Toast.LENGTH_SHORT).show()
+        }
+
+        btnClose.setOnClickListener { dialog.dismiss() }
+        dialog.show()
     }
 }

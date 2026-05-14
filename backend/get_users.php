@@ -3,6 +3,15 @@ header("Content-Type: application/json");
 require_once 'db_config.php';
 
 try {
+    // Auto-delete logic: Remove archived users after 6 months
+    try {
+        $sixMonthsAgo = date("Y-m-d H:i:s", strtotime("-6 months"));
+        $conn->prepare("DELETE FROM residents WHERE is_archived = 1 AND archived_at < ?")->execute([$sixMonthsAgo]);
+        $conn->prepare("DELETE FROM users WHERE is_archived = 1 AND archived_at < ?")->execute([$sixMonthsAgo]);
+    } catch (PDOException $e) {
+        // Silently skip if archived_at column is missing
+    }
+
     // Fetch Residents (Confirmed accounts in residents table)
     $resQuery = "SELECT resident_id as user_id, username, name, email, 'resident' as role, phone, purok, complete_address, created_at, is_archived FROM residents";
     $resStmt = $conn->prepare($resQuery);

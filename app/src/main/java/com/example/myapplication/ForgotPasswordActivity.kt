@@ -14,7 +14,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.example.myapplication.models.ApiResponse
+import com.example.myapplication.models.*
 import com.example.myapplication.network.RetrofitClient
 import com.example.myapplication.utils.CustomNotification
 import retrofit2.Call
@@ -35,7 +35,8 @@ class ForgotPasswordActivity : AppCompatActivity() {
     private lateinit var stepTitle: TextView
     private lateinit var stepSubtitle: TextView
 
-    private var currentPhone: String = ""
+    private var currentEmail: String = ""
+    private var currentOtp: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,12 +66,12 @@ class ForgotPasswordActivity : AppCompatActivity() {
             finish()
         }
 
-        // Step 1: Send Token
+        // Step 1: Send OTP
         findViewById<View>(R.id.btn_send_token).setOnClickListener {
             handleStep1()
         }
 
-        // Step 2: Verify Token
+        // Step 2: Verify OTP
         findViewById<View>(R.id.btn_verify_token).setOnClickListener {
             handleStep2()
         }
@@ -79,21 +80,56 @@ class ForgotPasswordActivity : AppCompatActivity() {
         findViewById<View>(R.id.btn_submit_reset).setOnClickListener {
             handleStep3()
         }
+
+        setupPasswordVisibilityToggles()
         
         updateHeader(1)
     }
 
+    private fun setupPasswordVisibilityToggles() {
+        val etNewPassword = findViewById<EditText>(R.id.et_new_password)
+        val ivShowNewPassword = findViewById<ImageView>(R.id.iv_show_new_password)
+        var isNewPasswordVisible = false
+
+        ivShowNewPassword.setOnClickListener {
+            if (isNewPasswordVisible) {
+                etNewPassword.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+                ivShowNewPassword.setImageResource(R.drawable.ic_eye_off)
+            } else {
+                etNewPassword.transformationMethod = android.text.method.HideReturnsTransformationMethod.getInstance()
+                ivShowNewPassword.setImageResource(R.drawable.ic_eye)
+            }
+            isNewPasswordVisible = !isNewPasswordVisible
+            etNewPassword.setSelection(etNewPassword.text.length)
+        }
+
+        val etConfirmPassword = findViewById<EditText>(R.id.et_confirm_password)
+        val ivShowConfirmPassword = findViewById<ImageView>(R.id.iv_show_confirm_password)
+        var isConfirmPasswordVisible = false
+
+        ivShowConfirmPassword.setOnClickListener {
+            if (isConfirmPasswordVisible) {
+                etConfirmPassword.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+                ivShowConfirmPassword.setImageResource(R.drawable.ic_eye_off)
+            } else {
+                etConfirmPassword.transformationMethod = android.text.method.HideReturnsTransformationMethod.getInstance()
+                ivShowConfirmPassword.setImageResource(R.drawable.ic_eye)
+            }
+            isConfirmPasswordVisible = !isConfirmPasswordVisible
+            etConfirmPassword.setSelection(etConfirmPassword.text.length)
+        }
+    }
+
     private fun updateHeader(step: Int) {
-        // Set lock icon for all steps as requested
         stepIcon.setImageResource(android.R.drawable.ic_lock_idle_lock)
         
         when(step) {
             1 -> {
-                stepTitle.text = "Verify Number"
+                stepTitle.text = "Verify Email"
                 stepSubtitle.text = "Step 1 of 3"
             }
             2 -> {
-                stepTitle.text = "Enter Token"
+                stepTitle.text = "Enter OTP"
                 stepSubtitle.text = "Step 2 of 3"
             }
             3 -> {
@@ -101,32 +137,32 @@ class ForgotPasswordActivity : AppCompatActivity() {
                 stepSubtitle.text = "Step 3 of 3"
             }
         }
-        // Animated transition for header
         stepIcon.scaleX = 0.5f
         stepIcon.scaleY = 0.5f
         stepIcon.animate().scaleX(1.0f).scaleY(1.0f).setDuration(300).start()
     }
 
     private fun handleStep1() {
-        val phone = findViewById<EditText>(R.id.et_phone).text.toString().trim()
+        val email = findViewById<EditText>(R.id.et_email).text.toString().trim()
 
-        if (phone.isEmpty() || phone.length < 10) {
-            CustomNotification.showTopNotification(this, "Please enter a valid contact number")
+        if (email.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            CustomNotification.showTopNotification(this, "Please enter a valid email address")
             return
         }
 
         showLoading(1, true)
-        RetrofitClient.instance.checkPhone(phone).enqueue(object : Callback<ApiResponse> {
+        val request = ForgotPasswordRequest(email)
+        RetrofitClient.instance.forgotPassword(request).enqueue(object : Callback<ApiResponse> {
             override fun onResponse(call: Call<ApiResponse>, response: Response<ApiResponse>) {
                 showLoading(1, false)
                 if (response.isSuccessful && response.body()?.success == true) {
-                    currentPhone = phone
-                    CustomNotification.showTopNotification(this@ForgotPasswordActivity, "Token sent to your number", false)
+                    currentEmail = email
+                    CustomNotification.showTopNotification(this@ForgotPasswordActivity, "OTP sent to your email", false)
                     layoutStep1.visibility = View.GONE
                     layoutStep2.visibility = View.VISIBLE
                     updateHeader(2)
                 } else {
-                    val message = response.body()?.message ?: "Number not found in database"
+                    val message = response.body()?.message ?: "Email not found"
                     CustomNotification.showTopNotification(this@ForgotPasswordActivity, message)
                 }
             }
@@ -139,24 +175,26 @@ class ForgotPasswordActivity : AppCompatActivity() {
     }
 
     private fun handleStep2() {
-        val token = findViewById<EditText>(R.id.et_token).text.toString().trim()
+        val otp = findViewById<EditText>(R.id.et_token).text.toString().trim()
 
-        if (token.isEmpty()) {
-            CustomNotification.showTopNotification(this, "Please enter the verification token")
+        if (otp.isEmpty() || otp.length != 6) {
+            CustomNotification.showTopNotification(this, "Please enter the 6-digit OTP code")
             return
         }
 
         showLoading(2, true)
-        RetrofitClient.instance.verifyToken(currentPhone, token).enqueue(object : Callback<ApiResponse> {
+        val request = VerifyOtpRequest(currentEmail, otp)
+        RetrofitClient.instance.verifyOtp(request).enqueue(object : Callback<ApiResponse> {
             override fun onResponse(call: Call<ApiResponse>, response: Response<ApiResponse>) {
                 showLoading(2, false)
                 if (response.isSuccessful && response.body()?.success == true) {
-                    CustomNotification.showTopNotification(this@ForgotPasswordActivity, "Token matched", false)
+                    currentOtp = otp
+                    CustomNotification.showTopNotification(this@ForgotPasswordActivity, "OTP verified", false)
                     layoutStep2.visibility = View.GONE
                     layoutStep3.visibility = View.VISIBLE
                     updateHeader(3)
                 } else {
-                    val message = response.body()?.message ?: "Invalid token"
+                    val message = response.body()?.message ?: "Invalid or expired OTP"
                     CustomNotification.showTopNotification(this@ForgotPasswordActivity, message)
                 }
             }
@@ -185,16 +223,17 @@ class ForgotPasswordActivity : AppCompatActivity() {
         }
 
         showLoading(3, true)
-        RetrofitClient.instance.resetPassword(currentPhone, newPass).enqueue(object : Callback<ApiResponse> {
+        val request = ResetPasswordFinalRequest(currentEmail, currentOtp, newPass)
+        RetrofitClient.instance.resetPasswordFinal(request).enqueue(object : Callback<ApiResponse> {
             override fun onResponse(call: Call<ApiResponse>, response: Response<ApiResponse>) {
                 showLoading(3, false)
                 if (response.isSuccessful && response.body()?.success == true) {
-                    CustomNotification.showTopNotification(this@ForgotPasswordActivity, "Password successfully updated", false)
+                    CustomNotification.showTopNotification(this@ForgotPasswordActivity, "Password updated successfully", false)
                     Handler(Looper.getMainLooper()).postDelayed({
                         finish()
                     }, 1500)
                 } else {
-                    val message = response.body()?.message ?: "Update failed"
+                    val message = response.body()?.message ?: "Reset failed"
                     CustomNotification.showTopNotification(this@ForgotPasswordActivity, message)
                 }
             }

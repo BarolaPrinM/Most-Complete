@@ -21,6 +21,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
         android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true"
         tools:targetApi="35">
 
         <!-- Ito ang tamang setup para sa Mapbox Token -->
